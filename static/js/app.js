@@ -16,6 +16,10 @@ document.addEventListener('alpine:init', () => {
         editingWatchlistId: null,
         editingWatchlistName: '',
         
+        // Inline Divider Rename State
+        editingDividerId: null,
+        editingDividerName: '',
+        
         // Search & Sections
         searchQuery: '',
         newSectionName: '',
@@ -27,6 +31,7 @@ document.addEventListener('alpine:init', () => {
         selectedStock: null,
         chartRange: '1mo',
         chartInstance: null,
+        sortableInstance: null,
         
         // Refresh Timer
         refreshIntervalId: null,
@@ -424,6 +429,95 @@ document.addEventListener('alpine:init', () => {
                 }
             } catch (error) {
                 console.error(`Error moving item ${direction}:`, error);
+            }
+        },
+
+        // Initialize SortableJS on the table body for drag and drop reordering
+        initSortable() {
+            this.$nextTick(() => {
+                const el = document.getElementById('watchlist-table-body');
+                if (!el) return;
+                
+                // Destroy existing instance if active
+                if (this.sortableInstance) {
+                    this.sortableInstance.destroy();
+                    this.sortableInstance = null;
+                }
+                
+                this.sortableInstance = Sortable.create(el, {
+                    animation: 150,
+                    handle: '.drag-handle', // Drag handle selector
+                    ghostClass: 'bg-slate-800/80',
+                    onStart: () => {
+                        this.stopAutoRefresh(); // Pause background refresh while dragging
+                    },
+                    onEnd: async (evt) => {
+                        this.startAutoRefresh(); // Resume background refresh
+                        
+                        // If index didn't change, do nothing
+                        if (evt.oldIndex === evt.newIndex) return;
+
+                        // Get all row elements to retrieve new order of IDs
+                        const rows = el.querySelectorAll('tr[data-id]');
+                        const itemIds = Array.from(rows).map(row => parseInt(row.getAttribute('data-id')));
+                        
+                        try {
+                            const response = await fetch(`/api/watchlists/${this.currentWatchlistId}/reorder`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(itemIds)
+                            });
+                            
+                            if (response.ok) {
+                                // Sync local array with new database order
+                                await this.fetchWatchlistQuotes();
+                            } else {
+                                console.error('Failed to save new order in database.');
+                            }
+                        } catch (error) {
+                            console.error('Error reordering items:', error);
+                        }
+                    }
+                });
+            });
+        },
+
+        // Start inline divider renaming
+        startEditingDivider(item) {
+            this.editingDividerId = item.id;
+            this.editingDividerName = item.symbol;
+            this.$nextTick(() => {
+                const el = document.getElementById('edit-divider-input');
+                if (el) el.focus();
+            });
+        },
+
+        // Confirm inline divider renaming
+        async confirmEditDivider(id) {
+            if (this.editingDividerId !== id) return;
+            
+            const name = this.editingDividerName.trim();
+            this.editingDividerId = null; // Reset first to prevent double trigger (enter + blur)
+            
+            if (!name) return; // Cancel if empty
+            
+            try {
+                const response = await fetch(`/api/watchlists/${this.currentWatchlistId}/items/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        symbol: name
+                    })
+                });
+
+                if (response.ok) {
+                    await this.fetchWatchlistQuotes();
+                } else {
+                    const err = await response.json();
+                    alert(`Error: ${err.detail || 'No se pudo renombrar la sección'}`);
+                }
+            } catch (error) {
+                console.error('Error renaming divider:', error);
             }
         },
 

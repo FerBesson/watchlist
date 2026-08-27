@@ -10,8 +10,10 @@
   <link rel="stylesheet" href="/static/css/style.css">
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- SortableJS CDN for Drag and Drop -->
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
   <!-- Custom JS Application -->
-  <script defer src="/static/js/app.js?v=1.6"></script>
+  <script defer src="/static/js/app.js?v=1.8"></script>
   <!-- Alpine.js CDN -->
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
@@ -215,9 +217,10 @@
                     <th class="w-12 text-center">ELIMINAR</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody id="watchlist-table-body" x-init="initSortable()">
                   <template x-for="item in watchlistItems" :key="item.id">
                     <tr 
+                      :data-id="item.id"
                       @click="!item.is_divider && viewStockDetail(item)"
                       class="transition border-b border-slate-900"
                       :class="{
@@ -230,15 +233,31 @@
                       <td x-show="item.is_divider" :colspan="selectedMetrics.length + 3" class="bg-slate-900/60 py-2 px-3 border-y border-slate-800">
                         <div class="flex justify-between items-center w-full font-mono text-xs">
                           <div class="flex items-center gap-2">
+                            <!-- Drag handle for Divider -->
+                            <span class="drag-handle cursor-grab active:cursor-grabbing text-slate-500 hover:text-[#00ff66] font-mono text-sm font-bold select-none pr-1">☰</span>
                             <span class="text-slate-600 text-[10px]">▼</span>
-                            <span class="text-[#00ff66] glow-green uppercase tracking-wider font-bold" x-text="item.symbol"></span>
+                            
+                            <!-- Título Normal (Doble click para renombrar) -->
+                            <span 
+                              x-show="editingDividerId !== item.id"
+                              @dblclick="startEditingDivider(item)"
+                              class="text-[#00ff66] glow-green uppercase tracking-wider font-bold cursor-pointer select-none"
+                              x-text="item.symbol"
+                              title="Doble clic para renombrar"
+                            ></span>
+                            
+                            <!-- Input para renombrar divisor -->
+                            <input 
+                              id="edit-divider-input"
+                              x-show="editingDividerId === item.id"
+                              type="text" 
+                              x-model="editingDividerName" 
+                              @keydown.enter="confirmEditDivider(item.id)" 
+                              @blur="confirmEditDivider(item.id)" 
+                              class="bg-slate-950 border border-slate-700 text-[#00ff66] font-mono text-xs px-2 py-0.5 outline-none focus:ring-1 focus:ring-[#00ff66] uppercase"
+                            >
                           </div>
                           <div class="flex items-center gap-4">
-                            <!-- Up/Down buttons for Divider -->
-                            <div class="flex gap-2 text-[10px] text-slate-500">
-                              <button @click.stop="moveItem(item.id, 'up')" class="hover:text-[#00ff66] font-bold">▲ SUBIR</button>
-                              <button @click.stop="moveItem(item.id, 'down')" class="hover:text-[#00ff66] font-bold">▼ BAJAR</button>
-                            </div>
                             <button @click.stop="removeStock(item.symbol)" class="text-red-500 hover:text-red-300 font-bold uppercase text-[10px]">[ ELIMINAR ]</button>
                           </div>
                         </div>
@@ -246,12 +265,10 @@
 
                       <!-- STOCK CELLS (Hidden if divider) -->
                       <td x-show="!item.is_divider" class="font-bold text-[#00f0ff] pr-4">
-                        <div class="flex items-center justify-between gap-2 w-full">
+                        <div class="flex items-center gap-2 w-full">
+                          <!-- Drag handle for Stock -->
+                          <span class="drag-handle cursor-grab active:cursor-grabbing text-slate-600 hover:text-[#00ff66] font-mono text-xs select-none">☰</span>
                           <span x-text="item.symbol"></span>
-                          <div class="flex flex-col text-[9px] text-slate-600 leading-none">
-                            <button @click.stop="moveItem(item.id, 'up')" class="hover:text-[#00ff66] p-0.5">▲</button>
-                            <button @click.stop="moveItem(item.id, 'down')" class="hover:text-[#00ff66] p-0.5">▼</button>
-                          </div>
                         </div>
                       </td>
                       

@@ -11,6 +11,9 @@ class WatchlistItemBase(BaseModel):
 class WatchlistItemCreate(WatchlistItemBase):
     pass
 
+class WatchlistItemUpdate(BaseModel):
+    symbol: str = Field(..., description="New ticker symbol or section header title")
+
 class WatchlistItem(WatchlistItemBase):
     id: int
     watchlist_id: int

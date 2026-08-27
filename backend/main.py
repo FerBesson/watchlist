@@ -241,6 +241,55 @@ def move_watchlist_item(watchlist_id: int, item_id: int, direction: str, db: Ses
         raise HTTPException(status_code=404, detail="Item not found")
     return {"message": f"Item moved {direction} successfully", "item_id": item_id, "direction": direction}
 
+@app.post("/api/watchlists/{watchlist_id}/reorder")
+def reorder_watchlist_items(watchlist_id: int, item_ids: List[int], db: Session = Depends(get_db)):
+    """Reorder multiple items in a watchlist simultaneously."""
+    db_watchlist = crud.get_watchlist(db, watchlist_id)
+    if not db_watchlist:
+        raise HTTPException(status_code=404, detail="Watchlist not found")
+        
+    db_items = {item.id: item for item in db_watchlist.items}
+    for idx, item_id in enumerate(item_ids):
+        if item_id in db_items:
+            db_items[item_id].order = idx
+            
+    db.commit()
+    return {"message": "Reordered successfully", "item_ids": item_ids}
+
+@app.put("/api/watchlists/{watchlist_id}/items/{item_id}", response_model=schemas.WatchlistItem)
+def update_watchlist_item(watchlist_id: int, item_id: int, item_update: schemas.WatchlistItemUpdate, db: Session = Depends(get_db)):
+    """Update a watchlist item (e.g., rename a section divider)."""
+    db_item = db.query(models.WatchlistItem).filter(
+        models.WatchlistItem.id == item_id,
+        models.WatchlistItem.watchlist_id == watchlist_id
+    ).first()
+    
+    if not db_item:
+        raise HTTPException(status_code=404, detail="Item not found")
+        
+    new_symbol = item_update.symbol.strip()
+    if not new_symbol:
+        raise HTTPException(status_code=400, detail="Name cannot be empty")
+        
+    # Keep stocks uppercase, preserve custom case for dividers
+    if not db_item.is_divider:
+        new_symbol = new_symbol.upper()
+        
+    # Check for name duplicates in same watchlist
+    existing = db.query(models.WatchlistItem).filter(
+        models.WatchlistItem.watchlist_id == watchlist_id,
+        models.WatchlistItem.symbol == new_symbol,
+        models.WatchlistItem.id != item_id
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Symbol or section name already exists in this watchlist")
+        
+    db_item.symbol = new_symbol
+    db.commit()
+    db.refresh(db_item)
+    return db_item
+
+
 
 @app.get("/api/charts/{symbol}")
 def get_chart_data(
