@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from . import models, schemas
@@ -11,13 +12,18 @@ def get_watchlist_by_name(db: Session, name: str):
     return db.query(models.Watchlist).filter(models.Watchlist.name == name).first()
 
 def get_watchlists(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.Watchlist).offset(skip).limit(limit).all()
+    # Sort watchlists by order ascending, then by database id
+    return db.query(models.Watchlist).order_by(models.Watchlist.order.asc(), models.Watchlist.id.asc()).offset(skip).limit(limit).all()
 
 def create_watchlist(db: Session, watchlist: schemas.WatchlistCreate):
+    # Get max order currently in watchlists
+    max_order = db.query(func.max(models.Watchlist.order)).scalar() or 0
+    
     db_watchlist = models.Watchlist(
         name=watchlist.name,
         description=watchlist.description,
-        metrics=watchlist.metrics
+        metrics=watchlist.metrics,
+        order=max_order + 1
     )
     db.add(db_watchlist)
     db.commit()
@@ -44,6 +50,18 @@ def delete_watchlist(db: Session, watchlist_id: int):
         db.commit()
         return True
     return False
+
+def reorder_watchlists(db: Session, watchlist_ids: list[int]) -> bool:
+    """Reorder multiple watchlists in bulk by assigning sequence order indices."""
+    watchlists = db.query(models.Watchlist).all()
+    watchlists_dict = {wl.id: wl for wl in watchlists}
+    
+    for index, wl_id in enumerate(watchlist_ids):
+        if wl_id in watchlists_dict:
+            watchlists_dict[wl_id].order = index
+            
+    db.commit()
+    return True
 
 
 # --- Watchlist Item Operations ---
@@ -157,3 +175,131 @@ def move_watchlist_item(db: Session, watchlist_id: int, item_id: int, direction:
         
     db.commit()
     return True
+
+
+# --- Transaction & Portfolio Operations ---
+
+def create_transaction(db: Session, tx: schemas.TransactionCreate):
+    symbol_formatted = tx.symbol.strip().upper()
+    price_comparable = tx.price * tx.ratio * tx.exchange_rate
+    
+    db_tx = models.Transaction(
+        symbol=symbol_formatted,
+        operation_type=tx.operation_type,
+        quantity=tx.quantity,
+        price=tx.price,
+        currency=tx.currency,
+        ratio=tx.ratio,
+        exchange_rate=tx.exchange_rate,
+        price_comparable=price_comparable,
+        date=tx.date if tx.date is not None else datetime.utcnow(),
+        notes=tx.notes
+    )
+    db.add(db_tx)
+    db.commit()
+    db.refresh(db_tx)
+    return db_tx
+
+def get_transactions(db: Session, skip: int = 0, limit: int = 100):
+    return db.query(models.Transaction).order_by(models.Transaction.date.desc(), models.Transaction.id.desc()).offset(skip).limit(limit).all()
+
+def delete_transaction(db: Session, tx_id: int) -> bool:
+    db_tx = db.query(models.Transaction).filter(models.Transaction.id == tx_id).first()
+    if db_tx:
+        db.delete(db_tx)
+        db.commit()
+        return True
+    return False
+
+def get_portfolio(db: Session):
+    # Fetch transactions in chronological order to calculate PPC
+    txs = db.query(models.Transaction).order_by(models.Transaction.date.asc(), models.Transaction.id.asc()).all()
+    
+    portfolio = {}
+    realized_pnl = 0.0
+    realized_pnl_cost = 0.0
+    
+    for tx in txs:
+        symbol = tx.symbol.upper()
+        if symbol not in portfolio:
+            portfolio[symbol] = {
+                "symbol": symbol,
+                "vn_total": 0.0,
+                "acciones_equivalentes": 0.0,
+                "ppc_comparable": 0.0,
+                "costo_total_usd": 0.0,
+                "ratio": tx.ratio
+            }
+        
+        p = portfolio[symbol]
+        cant_acciones = tx.quantity / tx.ratio
+        
+        if tx.operation_type == "BUY":
+            nuevas_acciones = p["acciones_equivalentes"] + cant_acciones
+            if nuevas_acciones > 0:
+                p["ppc_comparable"] = ((p["acciones_equivalentes"] * p["ppc_comparable"]) + (cant_acciones * tx.price_comparable)) / nuevas_acciones
+            p["acciones_equivalentes"] = nuevas_acciones
+            p["vn_total"] += tx.quantity
+            p["costo_total_usd"] = p["acciones_equivalentes"] * p["ppc_comparable"]
+            p["ratio"] = tx.ratio
+        elif tx.operation_type == "SELL":
+            # Realized P&L is: cant_acciones * (precio_venta_comparable - ppc_previo)
+            pnl_venta = cant_acciones * (tx.price_comparable - p["ppc_comparable"])
+            realized_pnl += pnl_venta
+            
+            # Realized cost basis for the sold shares: cant_acciones * ppc_previo
+            costo_venta = cant_acciones * p["ppc_comparable"]
+            realized_pnl_cost += costo_venta
+            
+            p["acciones_equivalentes"] = max(0.0, p["acciones_equivalentes"] - cant_acciones)
+            p["vn_total"] = max(0.0, p["vn_total"] - tx.quantity)
+            p["costo_total_usd"] = p["acciones_equivalentes"] * p["ppc_comparable"]
+            if p["acciones_equivalentes"] <= 0:
+                p["ppc_comparable"] = 0.0
+                p["vn_total"] = 0.0
+                p["costo_total_usd"] = 0.0
+                
+    # Calculate realized percentage
+    realized_pnl_percent = (realized_pnl / realized_pnl_cost * 100) if realized_pnl_cost > 0 else 0.0
+    
+    # Filter only active positions (VN > 0)
+    active_portfolio = [item for item in portfolio.values() if item["vn_total"] > 0]
+    
+    if not active_portfolio:
+        return {"items": [], "realized_pnl": realized_pnl, "realized_pnl_percent": realized_pnl_percent}
+        
+    # Fetch real-time quotes from Yahoo Finance for the active underlying symbols
+    symbols = [item["symbol"] for item in active_portfolio]
+    from .finance import finance_client
+    quotes = finance_client.get_quotes(symbols)
+    
+    # Calculate current values and unrealized PnL
+    result = []
+    for item in active_portfolio:
+        sym = item["symbol"]
+        quote = quotes.get(sym, {})
+        precio_afuera = quote.get("price") # Price of the stock in US (USD)
+        
+        valor_actual_usd = None
+        pnl_usd = None
+        pnl_percent = None
+        
+        if precio_afuera is not None:
+            valor_actual_usd = item["acciones_equivalentes"] * precio_afuera
+            pnl_usd = valor_actual_usd - item["costo_total_usd"]
+            pnl_percent = (pnl_usd / item["costo_total_usd"] * 100) if item["costo_total_usd"] > 0 else 0.0
+            
+        result.append({
+            "symbol": sym,
+            "vn_total": item["vn_total"],
+            "acciones_equivalentes": item["acciones_equivalentes"],
+            "ppc_comparable": item["ppc_comparable"],
+            "costo_total_usd": item["costo_total_usd"],
+            "precio_afuera": precio_afuera,
+            "valor_actual_usd": valor_actual_usd,
+            "pnl_usd": pnl_usd,
+            "pnl_percent": pnl_percent
+        })
+        
+    return {"items": result, "realized_pnl": realized_pnl, "realized_pnl_percent": realized_pnl_percent}
+

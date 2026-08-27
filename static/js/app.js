@@ -8,6 +8,29 @@ document.addEventListener('alpine:init', () => {
         isLoading: false,
         isQuotesLoading: false,
         
+        // Portfolio & Transaction State
+        activeView: 'watchlists', // 'watchlists' or 'portfolio'
+        portfolioItems: [],
+        portfolioRealizedPnL: 0.0,
+        portfolioRealizedPnLPercent: 0.0,
+        transactions: [],
+        isPortfolioLoading: false,
+        txForm: {
+            symbol: '',
+            operation_type: 'BUY',
+            quantity: '',
+            price: '',
+            currency: 'ARS',
+            ratio: 1.0,
+            exchange_input: 1300,
+            date: '',
+            notes: ''
+        },
+        portfolioRefreshIntervalId: null,
+        portfolioSearchResults: [],
+        portfolioSearchTimeout: null,
+        
+        
         // Inline Creation State
         isCreatingWatchlist: false,
         newWatchlistInputName: '',
@@ -32,6 +55,7 @@ document.addEventListener('alpine:init', () => {
         chartRange: '1mo',
         chartInstance: null,
         sortableInstance: null,
+        watchlistSortableInstance: null,
         
         // Refresh Timer
         refreshIntervalId: null,
@@ -159,6 +183,150 @@ document.addEventListener('alpine:init', () => {
             if (this.refreshIntervalId) {
                 clearInterval(this.refreshIntervalId);
                 this.refreshIntervalId = null;
+            }
+        },
+
+        // Select active view (watchlists or portfolio)
+        async selectView(view) {
+            this.activeView = view;
+            if (view === 'watchlists') {
+                this.stopPortfolioRefresh();
+                if (this.currentWatchlistId) {
+                    this.startAutoRefresh();
+                }
+            } else if (view === 'portfolio') {
+                this.stopAutoRefresh();
+                this.selectedStock = null;
+                this.isPortfolioLoading = true;
+                await Promise.all([this.fetchPortfolio(), this.fetchTransactions()]);
+                this.isPortfolioLoading = false;
+                this.startPortfolioRefresh();
+            }
+        },
+
+        // Fetch consolidated portfolio data
+        async fetchPortfolio() {
+            try {
+                const response = await fetch('/api/portfolio');
+                if (response.ok) {
+                    const data = await response.json();
+                    this.portfolioItems = data.items;
+                    this.portfolioRealizedPnL = data.realized_pnl;
+                    this.portfolioRealizedPnLPercent = data.realized_pnl_percent;
+                }
+            } catch (error) {
+                console.error('Error fetching portfolio:', error);
+            }
+        },
+
+        // Fetch transactions log
+        async fetchTransactions() {
+            try {
+                const response = await fetch('/api/transactions');
+                if (response.ok) {
+                    this.transactions = await response.json();
+                }
+            } catch (error) {
+                console.error('Error fetching transactions:', error);
+            }
+        },
+
+        // Submit new transaction
+        async submitTransaction() {
+            if (!this.txForm.symbol || !this.txForm.quantity || !this.txForm.price || !this.txForm.ratio || !this.txForm.exchange_input) {
+                alert('Por favor complete todos los campos obligatorios.');
+                return;
+            }
+
+            let qty = parseFloat(this.txForm.quantity);
+            let prc = parseFloat(this.txForm.price);
+            let rat = parseFloat(this.txForm.ratio);
+            let exInput = parseFloat(this.txForm.exchange_input);
+            let exRate = 1.0;
+
+            if (this.txForm.currency === 'ARS') {
+                exRate = 1.0 / exInput;
+            } else if (this.txForm.currency === 'USD') {
+                // If user entered e.g. 4 for 4%, convert to 0.04.
+                // If they entered 0.04 directly, keep as 0.04.
+                let canje = exInput;
+                if (canje >= 1.0) {
+                    canje = canje / 100.0;
+                }
+                exRate = 1.0 - canje;
+            }
+
+            const payload = {
+                symbol: this.txForm.symbol.trim().toUpperCase(),
+                operation_type: this.txForm.operation_type,
+                quantity: qty,
+                price: prc,
+                currency: this.txForm.currency,
+                ratio: rat,
+                exchange_rate: exRate,
+                date: this.txForm.date ? new Date(this.txForm.date).toISOString() : null,
+                notes: this.txForm.notes.trim() || null
+            };
+
+            try {
+                const response = await fetch('/api/transactions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (response.ok) {
+                    // Clear form but keep ratio and exchange defaults for convenience
+                    this.txForm.symbol = '';
+                    this.txForm.quantity = '';
+                    this.txForm.price = '';
+                    this.txForm.date = '';
+                    this.txForm.notes = '';
+                    
+                    // Reload data
+                    await Promise.all([this.fetchPortfolio(), this.fetchTransactions()]);
+                } else {
+                    const err = await response.json();
+                    alert(`Error: ${err.detail || 'No se pudo guardar la operación'}`);
+                }
+            } catch (error) {
+                console.error('Error submitting transaction:', error);
+            }
+        },
+
+        // Delete a transaction from log
+        async deleteTransaction(id) {
+            if (!confirm('¿Está seguro de eliminar esta transacción? Esta acción recalculará el PPC.')) {
+                return;
+            }
+            try {
+                const response = await fetch(`/api/transactions/${id}`, {
+                    method: 'DELETE'
+                });
+                if (response.ok) {
+                    await Promise.all([this.fetchPortfolio(), this.fetchTransactions()]);
+                } else {
+                    const err = await response.json();
+                    alert(`Error: ${err.detail || 'No se pudo eliminar la operación'}`);
+                }
+            } catch (error) {
+                console.error('Error deleting transaction:', error);
+            }
+        },
+
+        // Auto refresh for portfolio holdings
+        startPortfolioRefresh() {
+            this.stopPortfolioRefresh();
+            this.portfolioRefreshIntervalId = setInterval(() => {
+                this.fetchPortfolio();
+            }, 10000);
+        },
+
+        // Stop portfolio refresh
+        stopPortfolioRefresh() {
+            if (this.portfolioRefreshIntervalId) {
+                clearInterval(this.portfolioRefreshIntervalId);
+                this.portfolioRefreshIntervalId = null;
             }
         },
 
@@ -335,6 +503,47 @@ document.addEventListener('alpine:init', () => {
                     this.isSearching = false;
                 }
             }, 300); // 300ms debounce
+        },
+
+        // Autocomplete Search for Portfolio Transactions
+        searchPortfolioStocks() {
+            if (this.portfolioSearchTimeout) clearTimeout(this.portfolioSearchTimeout);
+            if (!this.txForm.symbol.trim()) {
+                this.portfolioSearchResults = [];
+                return;
+            }
+
+            this.portfolioSearchTimeout = setTimeout(async () => {
+                try {
+                    const response = await fetch(`/api/search?q=${encodeURIComponent(this.txForm.symbol.trim())}`);
+                    if (response.ok) {
+                        this.portfolioSearchResults = await response.json();
+                    }
+                } catch (error) {
+                    console.error('Portfolio search error:', error);
+                }
+            }, 300); // 300ms debounce
+        },
+
+        // Select a stock from search results for transaction form
+        async selectPortfolioStock(symbol) {
+            this.txForm.symbol = symbol;
+            this.portfolioSearchResults = [];
+            
+            try {
+                const response = await fetch(`/api/cedear-info/${symbol}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.ratio) {
+                        this.txForm.ratio = data.ratio;
+                    }
+                    if (data && data.symbol_origin) {
+                        this.txForm.symbol = data.symbol_origin;
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching Cedear info:', error);
+            }
         },
 
         // Add a stock from search results to current watchlist
@@ -521,6 +730,51 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        // Initialize SortableJS on the sidebar watchlist nav for reordering
+        initWatchlistSortable() {
+            this.$nextTick(() => {
+                const el = document.getElementById('watchlist-nav');
+                if (!el) return;
+                
+                // Destroy existing instance if active
+                if (this.watchlistSortableInstance) {
+                    this.watchlistSortableInstance.destroy();
+                    this.watchlistSortableInstance = null;
+                }
+                
+                this.watchlistSortableInstance = Sortable.create(el, {
+                    animation: 150,
+                    handle: '.wl-drag-handle', // Drag handle selector
+                    ghostClass: 'bg-slate-800/80',
+                    onEnd: async (evt) => {
+                        // If index didn't change, do nothing
+                        if (evt.oldIndex === evt.newIndex) return;
+
+                        // Get all watchlist row elements to retrieve new order of IDs
+                        const rows = el.querySelectorAll('[data-wl-id]');
+                        const wlIds = Array.from(rows).map(row => parseInt(row.getAttribute('data-wl-id')));
+                        
+                        try {
+                            const response = await fetch('/api/watchlists/reorder', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(wlIds)
+                            });
+                            
+                            if (response.ok) {
+                                // Sync local array with new database order
+                                await this.fetchWatchlists();
+                            } else {
+                                console.error('Failed to save new watchlist order in database.');
+                            }
+                        } catch (error) {
+                            console.error('Error reordering watchlists:', error);
+                        }
+                    }
+                });
+            });
+        },
+
         // Show Stock details and plot history chart
         viewStockDetail(stock) {
             this.selectedStock = stock;
@@ -678,6 +932,29 @@ document.addEventListener('alpine:init', () => {
                     }
                 }
             });
+        },
+
+        // Getters reactivos para totales del portafolio
+        get portfolioCost() {
+            return this.portfolioItems.reduce((acc, item) => acc + (item.costo_total_usd || 0), 0);
+        },
+
+        get portfolioValue() {
+            return this.portfolioItems.reduce((acc, item) => {
+                if (item.precio_afuera !== null && item.precio_afuera !== undefined) {
+                    return acc + (item.acciones_equivalentes * item.precio_afuera);
+                }
+                return acc + (item.costo_total_usd || 0); // fallback al costo si no hay precio de mercado
+            }, 0);
+        },
+
+        get portfolioPnL() {
+            return this.portfolioValue - this.portfolioCost;
+        },
+
+        get portfolioPnLPercent() {
+            const cost = this.portfolioCost;
+            return cost > 0 ? (this.portfolioPnL / cost * 100) : 0;
         },
 
         // Helper: formatting large numbers (Market Cap)

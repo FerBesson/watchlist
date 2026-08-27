@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, UniqueConstraint, Boolean, Float
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -11,6 +11,7 @@ class Watchlist(Base):
     description = Column(String, nullable=True)
     # Comma-separated list of metrics/columns to show, e.g., "sector,price,prev_close,change"
     metrics = Column(String, default="sector,price,prev_close,change", nullable=False)
+    order = Column(Integer, default=0, nullable=False)    # Sorting sequence index for watchlists in sidebar
 
     items = relationship("WatchlistItem", back_populates="watchlist", cascade="all, delete-orphan")
 
@@ -34,3 +35,20 @@ class WatchlistItem(Base):
     __table_args__ = (
         UniqueConstraint("watchlist_id", "symbol", name="uq_watchlist_symbol"),
     )
+
+
+class Transaction(Base):
+    __tablename__ = "transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    symbol = Column(String, index=True, nullable=False)        # Ticker symbol (e.g., AAPL)
+    operation_type = Column(String, nullable=False)            # "BUY" or "SELL"
+    quantity = Column(Float, nullable=False)                   # VN (Volumen Nominal)
+    price = Column(Float, nullable=False)                      # Precio pactado del Cedear / activo
+    currency = Column(String, default="ARS", nullable=False)   # "ARS" or "USD"
+    ratio = Column(Float, default=1.0, nullable=False)         # Ratio Cedear (ej: 20 para AAPL)
+    exchange_rate = Column(Float, default=1.0, nullable=False) # TC/Canje: Para ARS es 1/CCL, para USD es canje MEP-CCL
+    price_comparable = Column(Float, nullable=False)           # Precio en USD afuera = price * ratio * exchange_rate
+    date = Column(DateTime, default=datetime.utcnow, nullable=False)
+    notes = Column(String, nullable=True)
+

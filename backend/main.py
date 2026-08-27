@@ -119,6 +119,13 @@ def delete_watchlist(watchlist_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Watchlist not found")
     return {"message": "Watchlist deleted successfully", "id": watchlist_id}
 
+@app.post("/api/watchlists/reorder")
+def reorder_watchlists_list(watchlist_ids: List[int], db: Session = Depends(get_db)):
+    """Reorder multiple watchlists in bulk by updating their sequence order."""
+    crud.reorder_watchlists(db=db, watchlist_ids=watchlist_ids)
+    return {"message": "Watchlists reordered successfully", "watchlist_ids": watchlist_ids}
+
+
 
 # --- WATCHLIST ITEM ENDPOINTS ---
 
@@ -291,6 +298,44 @@ def update_watchlist_item(watchlist_id: int, item_id: int, item_update: schemas.
 
 
 
+# --- TRANSACTION & PORTFOLIO ENDPOINTS ---
+
+@app.post("/api/transactions", response_model=schemas.Transaction, status_code=status.HTTP_201_CREATED)
+def create_transaction(transaction: schemas.TransactionCreate, db: Session = Depends(get_db)):
+    """Create a new transaction (BUY or SELL)."""
+    if transaction.operation_type not in ["BUY", "SELL"]:
+        raise HTTPException(status_code=400, detail="Operation type must be 'BUY' or 'SELL'")
+    if transaction.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be greater than zero")
+    if transaction.price <= 0:
+        raise HTTPException(status_code=400, detail="Price must be greater than zero")
+    if transaction.ratio <= 0:
+        raise HTTPException(status_code=400, detail="Ratio must be greater than zero")
+    if transaction.exchange_rate <= 0:
+        raise HTTPException(status_code=400, detail="Exchange rate must be greater than zero")
+        
+    return crud.create_transaction(db=db, tx=transaction)
+
+@app.get("/api/transactions", response_model=List[schemas.Transaction])
+def read_transactions(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    """Get the log of transactions."""
+    return crud.get_transactions(db=db, skip=skip, limit=limit)
+
+@app.delete("/api/transactions/{transaction_id}")
+def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
+    """Delete a transaction by ID."""
+    success = crud.delete_transaction(db=db, tx_id=transaction_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return {"message": "Transaction deleted successfully", "id": transaction_id}
+
+@app.get("/api/portfolio", response_model=schemas.PortfolioResponse)
+def read_portfolio(db: Session = Depends(get_db)):
+    """Get the consolidated portfolio with real-time stock prices from Yahoo Finance."""
+    return crud.get_portfolio(db=db)
+
+
+
 @app.get("/api/charts/{symbol}")
 def get_chart_data(
     symbol: str, 
@@ -302,6 +347,26 @@ def get_chart_data(
     if not data:
         raise HTTPException(status_code=404, detail=f"No chart data found for symbol {symbol.upper()}")
     return data
+
+
+@app.get("/api/cedear-info/{symbol}")
+def get_cedear_info(symbol: str):
+    """Retrieve the ratio and official origin ticker for a Cedear from Comafi dataset."""
+    from .finance import cedear_ratios
+    sym_upper = symbol.strip().upper()
+    
+    # Strip .BA extension if present
+    if sym_upper.endswith(".BA"):
+        sym_clean = sym_upper[:-3]
+    else:
+        sym_clean = sym_upper
+        
+    info = cedear_ratios.get(sym_clean)
+    if info:
+        return {"ratio": info["ratio"], "symbol": info["symbol"], "symbol_origin": info["symbol_origin"]}
+    
+    # Return 1.0 ratio by default
+    return {"ratio": 1.0, "symbol": sym_clean, "symbol_origin": sym_clean}
 
 
 # --- SERVING STATIC FRONTEND ---

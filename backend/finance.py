@@ -1,5 +1,7 @@
 import time
+import re
 import requests
+from bs4 import BeautifulSoup
 from typing import List, Dict, Any, Optional
 
 BASE_URL = "https://query1.finance.yahoo.com"
@@ -220,3 +222,105 @@ class YahooFinanceClient:
 
 # Singleton instance
 finance_client = YahooFinanceClient()
+
+
+cedear_ratios: Dict[str, Dict[str, Any]] = {}
+
+def load_cedear_ratios():
+    global cedear_ratios
+    url = "https://www.comafi.com.ar/custodiaglobal/2483-Programas-Cedear.note.aspx"
+    fallback = {
+        "AAPL": {"symbol": "AAPL", "symbol_origin": "AAPL", "ratio": 20.0},
+        "TSLA": {"symbol": "TSLA", "symbol_origin": "TSLA", "ratio": 15.0},
+        "MSFT": {"symbol": "MSFT", "symbol_origin": "MSFT", "ratio": 30.0},
+        "AMZN": {"symbol": "AMZN", "symbol_origin": "AMZN", "ratio": 144.0},
+        "KO": {"symbol": "KO", "symbol_origin": "KO", "ratio": 5.0},
+        "NVDA": {"symbol": "NVDA", "symbol_origin": "NVDA", "ratio": 24.0},
+        "MELI": {"symbol": "MELI", "symbol_origin": "MELI", "ratio": 120.0},
+        "BABA": {"symbol": "BABA", "symbol_origin": "BABA", "ratio": 9.0},
+        "GOOGL": {"symbol": "GOOGL", "symbol_origin": "GOOGL", "ratio": 58.0},
+        "AMD": {"symbol": "AMD", "symbol_origin": "AMD", "ratio": 10.0},
+        "BRKB": {"symbol": "BRKB", "symbol_origin": "BRKB", "ratio": 2.0},
+        "DIS": {"symbol": "DIS", "symbol_origin": "DIS", "ratio": 4.0},
+        "META": {"symbol": "META", "symbol_origin": "META", "ratio": 24.0},
+        "NFLX": {"symbol": "NFLX", "symbol_origin": "NFLX", "ratio": 16.0},
+        "WMT": {"symbol": "WMT", "symbol_origin": "WMT", "ratio": 3.0},
+        "PYPL": {"symbol": "PYPL", "symbol_origin": "PYPL", "ratio": 8.0},
+        "INTC": {"symbol": "INTC", "symbol_origin": "INTC", "ratio": 5.0},
+        "QCOM": {"symbol": "QCOM", "symbol_origin": "QCOM", "ratio": 11.0},
+        "CSCO": {"symbol": "CSCO", "symbol_origin": "CSCO", "ratio": 5.0},
+        "NKE": {"symbol": "NKE", "symbol_origin": "NKE", "ratio": 3.0},
+        "MCD": {"symbol": "MCD", "symbol_origin": "MCD", "ratio": 8.0},
+        "V": {"symbol": "V", "symbol_origin": "V", "ratio": 18.0},
+        "HD": {"symbol": "HD", "symbol_origin": "HD", "ratio": 8.0},
+        "JNJ": {"symbol": "JNJ", "symbol_origin": "JNJ", "ratio": 5.0},
+        "PG": {"symbol": "PG", "symbol_origin": "PG", "ratio": 5.0},
+        "X": {"symbol": "X", "symbol_origin": "X", "ratio": 1.0},
+        "DESP": {"symbol": "DESP", "symbol_origin": "DESP", "ratio": 1.0},
+        "GGAL": {"symbol": "GGAL", "symbol_origin": "GGAL", "ratio": 1.0},
+        "YPF": {"symbol": "YPF", "symbol_origin": "YPF", "ratio": 1.0},
+        "PBR": {"symbol": "PBR", "symbol_origin": "PBR", "ratio": 1.0},
+        "VALE": {"symbol": "VALE", "symbol_origin": "VALE", "ratio": 1.0}
+    }
+    
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=10)
+        if r.status_code == 200:
+            soup = BeautifulSoup(r.text, 'html.parser')
+            tables = soup.find_all('table')
+            scraped = {}
+            for table in tables:
+                rows = table.find_all('tr')
+                if len(rows) < 5:
+                    continue
+                header = [col.get_text(strip=True).lower() for col in rows[0].find_all(['td', 'th'])]
+                
+                idx_ratio = 2
+                idx_byma = 5
+                idx_origin = 6
+                
+                for idx, name in enumerate(header):
+                    if 'ratio' in name:
+                        idx_ratio = idx
+                    elif 'iddemercado' in name or 'código' in name:
+                        idx_byma = idx
+                    elif 'origen' in name or 'ticker' in name:
+                        idx_origin = idx
+                        
+                for row in rows[1:]:
+                    cols = [col.get_text(strip=True) for col in row.find_all(['td', 'th'])]
+                    if len(cols) <= max(idx_ratio, idx_byma, idx_origin):
+                        continue
+                    
+                    byma_ticker = cols[idx_byma].strip().upper()
+                    origin_ticker = cols[idx_origin].strip().upper()
+                    ratio_str = cols[idx_ratio].strip()
+                    
+                    if not byma_ticker or not ratio_str:
+                        continue
+                        
+                    match = re.match(r'^([\d\.,]+)\s*:\s*([\d\.,]+)$', ratio_str)
+                    if match:
+                        try:
+                            num = float(match.group(1).replace('.', '').replace(',', '.'))
+                            den = float(match.group(2).replace('.', '').replace(',', '.'))
+                            ratio_val = num / den if den > 0 else 1.0
+                            scraped[byma_ticker] = {
+                                "symbol": byma_ticker,
+                                "symbol_origin": origin_ticker,
+                                "ratio": ratio_val
+                            }
+                        except ValueError:
+                            pass
+            if scraped:
+                cedear_ratios = scraped
+                print(f"[Cedears] Successfully loaded {len(cedear_ratios)} CEDEAR ratios from Comafi.")
+                return
+        print("[Cedears] Failed to fetch Comafi table. Using fallbacks.")
+        cedear_ratios = fallback
+    except Exception as e:
+        print(f"[Cedears] Error loading ratios from Comafi ({e}). Using fallbacks.")
+        cedear_ratios = fallback
+
+# Load ratios on module import
+load_cedear_ratios()

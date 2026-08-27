@@ -43,7 +43,56 @@ class WatchlistUpdate(BaseModel):
 
 class Watchlist(WatchlistBase):
     id: int
+    order: int
     items: List[WatchlistItem] = []
 
     class Config:
         from_attributes = True
+
+
+# --- Transactions & Portfolio ---
+class TransactionBase(BaseModel):
+    symbol: str = Field(..., description="Ticker symbol (e.g. AAPL)")
+    operation_type: str = Field(..., description="'BUY' or 'SELL'")
+    quantity: float = Field(..., description="Quantity/Volume Nominal (VN)")
+    price: float = Field(..., description="Unit price of the asset")
+    currency: Optional[str] = Field("ARS", description="ARS or USD")
+    ratio: Optional[float] = Field(1.0, description="Cedear ratio (Cedears per share, e.g. 20)")
+    exchange_rate: Optional[float] = Field(1.0, description="TC/Canje multiplier to get USD price")
+    date: Optional[datetime] = Field(None, description="Date of the transaction. Defaults to now if not provided.")
+    notes: Optional[str] = None
+
+class TransactionCreate(TransactionBase):
+    pass
+
+class Transaction(TransactionBase):
+    id: int
+    price_comparable: float
+    date: datetime
+
+    class Config:
+        from_attributes = True
+
+class PortfolioItem(BaseModel):
+    symbol: str
+    vn_total: float
+    acciones_equivalentes: float
+    ppc_comparable: float
+    costo_total_usd: float
+    precio_afuera: Optional[float] = None
+    valor_actual_usd: Optional[float] = None
+    pnl_usd: Optional[float] = None
+    pnl_percent: Optional[float] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PortfolioResponse(BaseModel):
+    items: List[PortfolioItem]
+    realized_pnl: float
+    realized_pnl_percent: float
+
+    class Config:
+        from_attributes = True
+
