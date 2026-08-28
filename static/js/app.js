@@ -26,6 +26,7 @@ document.addEventListener('alpine:init', () => {
             largest_loss: 0.0
         },
         closedTrades: [],
+        portfolioTIR: null,
         transactions: [],
         isPortfolioLoading: false,
         txForm: {
@@ -98,8 +99,11 @@ document.addEventListener('alpine:init', () => {
             // Fetch initial exchange rate
             await this.fetchExchangeRate();
 
-            // Watch for changes in date or currency to update exchange rate
-            this.$watch('txForm.date', () => this.fetchExchangeRate());
+            // Watch for changes in date or currency to update exchange rate and ratio
+            this.$watch('txForm.date', () => {
+                this.fetchExchangeRate();
+                this.fetchCedearRatio();
+            });
             this.$watch('txForm.currency', () => this.fetchExchangeRate());
         },
 
@@ -236,6 +240,7 @@ document.addEventListener('alpine:init', () => {
                     this.portfolioRealizedPnLPercent = data.realized_pnl_percent;
                     if (data.metrics) this.portfolioMetrics = data.metrics;
                     if (data.closed_trades) this.closedTrades = data.closed_trades;
+                    this.portfolioTIR = data.tir;
                     this.$nextTick(() => {
                         this.renderPortfolioTreemap();
                     });
@@ -698,7 +703,8 @@ document.addEventListener('alpine:init', () => {
             }
             
             try {
-                const response = await fetch(`/api/cedear-info/${symbol}`);
+                const dateStr = this.txForm.date || '';
+                const response = await fetch(`/api/cedear-info/${symbol}?date=${encodeURIComponent(dateStr)}`);
                 if (response.ok) {
                     const data = await response.json();
                     if (data && data.ratio) {
@@ -730,6 +736,26 @@ document.addEventListener('alpine:init', () => {
                 }
             } catch (error) {
                 console.error('Error fetching exchange rate:', error);
+            }
+        },
+
+        // Fetch automated Cedear ratio from backend
+        async fetchCedearRatio() {
+            const symbol = this.txForm.symbol || '';
+            const dateStr = this.txForm.date || '';
+            if (!symbol || symbol.toUpperCase() === "CASH") return;
+            if (dateStr && dateStr.length < 10) return;
+            
+            try {
+                const response = await fetch(`/api/cedear-info/${encodeURIComponent(symbol)}?date=${encodeURIComponent(dateStr)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.ratio !== undefined) {
+                        this.txForm.ratio = data.ratio;
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching Cedear ratio:', error);
             }
         },
 

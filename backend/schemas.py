@@ -127,6 +127,7 @@ class PortfolioResponse(BaseModel):
     realized_pnl_percent: float
     metrics: PerformanceMetrics
     closed_trades: List[ClosedTrade]
+    tir: Optional[float] = None
 
     class Config:
         from_attributes = True

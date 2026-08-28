@@ -157,9 +157,15 @@
               <span class="text-slate-500">RENDIMIENTO EN USD:</span>
               <span class="font-bold" :class="portfolioPnL >= 0 ? 'text-[#00ff66] glow-green' : 'text-[#ff3b30]'" x-text="(portfolioPnL >= 0 ? '+' : '') + formatPrice(portfolioPnL)"></span>
             </div>
-            <div class="flex justify-between items-center pb-1">
+            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
               <span class="text-slate-500">RENDIMIENTO EN %:</span>
               <span class="font-bold" :class="portfolioPnL >= 0 ? 'text-[#00ff66] glow-green' : 'text-[#ff3b30]'" x-text="formatPercent(portfolioPnLPercent)"></span>
+            </div>
+            <div class="flex justify-between items-center pb-1">
+              <span class="text-slate-500">TIR (XIRR) ANUALIZADA:</span>
+              <span class="font-bold" 
+                :class="portfolioTIR !== null ? (portfolioTIR >= 0 ? 'text-[#00ff66] glow-green' : 'text-[#ff3b30]') : 'text-slate-500'"
+                x-text="portfolioTIR !== null ? formatPercent(portfolioTIR) : '—'"></span>
             </div>
           </div>
         </div>

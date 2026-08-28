@@ -405,7 +405,7 @@ def import_transactions(file: UploadFile = File(...), db: Session = Depends(get_
     imported_count = 0
     skipped_count = 0
     
-    from .finance import cedear_ratios
+    from .finance import get_cedear_info_by_symbol_and_date
     from .exchange import get_rates_for_date
     
     for idx, row in df.iterrows():
@@ -430,13 +430,9 @@ def import_transactions(file: UploadFile = File(...), db: Session = Depends(get_
             raw_symbol = str(row[col_map['symbol']]).strip().upper()
             sym_clean = raw_symbol[:-3] if raw_symbol.endswith(".BA") else raw_symbol
             
-            info = cedear_ratios.get(sym_clean)
-            if info:
-                ratio = info["ratio"]
-                symbol = info["symbol_origin"]
-            else:
-                ratio = 1.0
-                symbol = sym_clean
+            info = get_cedear_info_by_symbol_and_date(sym_clean, date_val)
+            ratio = info["ratio"]
+            symbol = info["symbol_origin"]
                 
             # Currency
             raw_currency = str(row[col_map['currency']]).strip().upper()
@@ -525,23 +521,13 @@ def get_chart_data(
 
 
 @app.get("/api/cedear-info/{symbol}")
-def get_cedear_info(symbol: str):
+def get_cedear_info(
+    symbol: str,
+    date: Optional[str] = Query(None, description="Fecha de la operación (YYYY-MM-DD)")
+):
     """Retrieve the ratio and official origin ticker for a Cedear from Comafi dataset."""
-    from .finance import cedear_ratios
-    sym_upper = symbol.strip().upper()
-    
-    # Strip .BA extension if present
-    if sym_upper.endswith(".BA"):
-        sym_clean = sym_upper[:-3]
-    else:
-        sym_clean = sym_upper
-        
-    info = cedear_ratios.get(sym_clean)
-    if info:
-        return {"ratio": info["ratio"], "symbol": info["symbol"], "symbol_origin": info["symbol_origin"]}
-    
-    # Return 1.0 ratio by default
-    return {"ratio": 1.0, "symbol": sym_clean, "symbol_origin": sym_clean}
+    from .finance import get_cedear_info_by_symbol_and_date
+    return get_cedear_info_by_symbol_and_date(symbol, date)
 
 
 @app.get("/api/exchange-rate")

@@ -415,12 +415,83 @@ def get_portfolio(db: Session):
 
     # Sort closed trades by date descending
     closed_trades.sort(key=lambda x: x["date"], reverse=True)
+    
+    # --- XIRR (TIR) Calculation ---
+    # Build cash flow series: BUY = negative outflow, SELL = positive inflow
+    # Final flow = current portfolio value + cash balance at today's date
+    from datetime import datetime as _dt, timezone as _tz
+    
+    cash_flows = []  # list of (datetime, amount)
+    for tx in txs:
+        symbol = tx.symbol.upper()
+        cant_acciones = tx.quantity / tx.ratio
+        monto_usd = cant_acciones * tx.price_comparable
+        
+        if symbol == "CASH":
+            # CASH BUY = capital injection (negative outflow for XIRR)
+            if tx.operation_type == "BUY":
+                cash_flows.append((tx.date, -monto_usd))
+            elif tx.operation_type == "SELL":
+                cash_flows.append((tx.date, monto_usd))
+        elif tx.operation_type == "BUY":
+            cash_flows.append((tx.date, -monto_usd))
+        elif tx.operation_type == "SELL":
+            cash_flows.append((tx.date, monto_usd))
+    
+    # Add terminal value: current portfolio valuation + remaining cash
+    terminal_value = sum(
+        item.get("valor_actual_usd", 0.0) or 0.0 for item in result
+        if item["symbol"] != "CASH"
+    ) + max(cash_balance, 0.0)
+    
+    now = _dt.now(_tz.utc)
+    if terminal_value > 0:
+        cash_flows.append((now, terminal_value))
+    
+    # Calculate XIRR via Newton-Raphson
+    tir = None
+    if len(cash_flows) >= 2:
+        t0 = cash_flows[0][0]
+        # Ensure all datetimes are offset-naive for consistent subtraction
+        def to_naive(dt_obj):
+            if hasattr(dt_obj, 'tzinfo') and dt_obj.tzinfo is not None:
+                return dt_obj.replace(tzinfo=None)
+            return dt_obj
+        
+        t0_naive = to_naive(t0)
+        years = [float((to_naive(cf[0]) - t0_naive).total_seconds()) / (365.25 * 86400) for cf in cash_flows]
+        values = [cf[1] for cf in cash_flows]
+        
+        def npv(r):
+            return sum(v / ((1.0 + r) ** y) for v, y in zip(values, years))
+        
+        def npv_deriv(r):
+            return sum(-y * v / ((1.0 + r) ** (y + 1)) for v, y in zip(values, years))
+        
+        r = 0.1  # initial guess 10%
+        try:
+            for _ in range(200):
+                val = npv(r)
+                deriv = npv_deriv(r)
+                if abs(deriv) < 1e-12:
+                    break
+                next_r = r - val / deriv
+                if abs(next_r - r) < 1e-8:
+                    r = next_r
+                    break
+                r = next_r
+            # Sanity check: XIRR should be within reasonable bounds (-99% to +10000%)
+            if -0.99 < r < 100.0:
+                tir = round(r * 100, 2)
+        except (ZeroDivisionError, OverflowError, ValueError):
+            tir = None
         
     return {
         "items": result, 
         "realized_pnl": realized_pnl, 
         "realized_pnl_percent": realized_pnl_percent,
         "metrics": metrics,
-        "closed_trades": closed_trades
+        "closed_trades": closed_trades,
+        "tir": tir
     }
 

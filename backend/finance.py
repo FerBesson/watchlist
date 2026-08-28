@@ -1,6 +1,7 @@
 import time
 import re
 import requests
+import datetime
 from bs4 import BeautifulSoup
 from typing import List, Dict, Any, Optional
 
@@ -295,3 +296,47 @@ def load_cedear_ratios():
 
 # Load ratios on module import
 load_cedear_ratios()
+
+def get_cedear_info_by_symbol_and_date(symbol: str, date_val: Any = None) -> Dict[str, Any]:
+    global cedear_ratios
+    sym_upper = symbol.strip().upper()
+    sym_clean = sym_upper[:-3] if sym_upper.endswith(".BA") else sym_upper
+    
+    info = cedear_ratios.get(sym_clean)
+    if info:
+        res = {
+            "ratio": info["ratio"],
+            "symbol": info["symbol"],
+            "symbol_origin": info["symbol_origin"]
+        }
+    else:
+        res = {
+            "ratio": 1.0,
+            "symbol": sym_clean,
+            "symbol_origin": sym_clean
+        }
+        
+    if sym_clean == "SPY":
+        target_date = None
+        if date_val is not None:
+            if isinstance(date_val, (datetime.datetime, datetime.date)):
+                target_date = date_val
+                if isinstance(target_date, datetime.datetime):
+                    target_date = target_date.date()
+            elif isinstance(date_val, str):
+                try:
+                    clean_date = date_val.split('T')[0]
+                    target_date = datetime.datetime.strptime(clean_date, "%Y-%m-%d").date()
+                except ValueError:
+                    pass
+        
+        if target_date is not None:
+            if target_date < datetime.date(2026, 5, 29):
+                res["ratio"] = 20.0
+            else:
+                res["ratio"] = 60.0
+        else:
+            # Default to the current ratio if no date is provided
+            res["ratio"] = 60.0
+            
+    return res
