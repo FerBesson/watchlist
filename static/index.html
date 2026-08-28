@@ -139,28 +139,23 @@
           <h2 class="text-slate-400 text-xs font-bold uppercase mb-4">&gt; RESUMEN CARTERA</h2>
           <div class="flex flex-col gap-3">
             <div class="flex justify-between items-center border-b border-slate-900 pb-2">
-              <span class="text-slate-500">COSTO INVERTIDO:</span>
+              <span class="text-slate-500">MONTO INVERTIDO:</span>
               <span class="text-slate-200 font-bold" x-text="formatPrice(portfolioCost)"></span>
             </div>
             <div class="flex justify-between items-center border-b border-slate-900 pb-2">
-              <span class="text-slate-500">VALORIZACIÓN:</span>
-              <span class="text-[#00f0ff] font-bold" x-text="formatPrice(portfolioValue)"></span>
+              <span class="text-slate-500">VALORIZACIÓN ACTUAL:</span>
+              <div class="flex items-center gap-1">
+                <span class="text-[#00f0ff] font-bold" x-text="formatPrice(portfolioValue)"></span>
+                <span class="font-bold text-[10px]" :class="portfolioDailyChangePercent >= 0 ? 'text-[#00ff66] glow-green' : 'text-[#ff3b30]'" x-text="'(' + formatPercent(portfolioDailyChangePercent) + ')'"></span>
+              </div>
             </div>
             <div class="flex justify-between items-center border-b border-slate-900 pb-2">
-              <span class="text-slate-500">G/P LATENTE (USD):</span>
+              <span class="text-slate-500">RENDIMIENTO EN USD:</span>
               <span class="font-bold" :class="portfolioPnL >= 0 ? 'text-[#00ff66] glow-green' : 'text-[#ff3b30]'" x-text="(portfolioPnL >= 0 ? '+' : '') + formatPrice(portfolioPnL)"></span>
             </div>
-            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
-              <span class="text-slate-500">G/P LATENTE (%):</span>
-              <span class="font-bold" :class="portfolioPnL >= 0 ? 'text-[#00ff66] glow-green' : 'text-[#ff3b30]'" x-text="formatPercent(portfolioPnLPercent)"></span>
-            </div>
-            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
-              <span class="text-slate-500">G/P REALIZADA (USD):</span>
-              <span class="font-bold" :class="portfolioRealizedPnL >= 0 ? 'text-[#00ff66] glow-green' : 'text-[#ff3b30]'" x-text="(portfolioRealizedPnL >= 0 ? '+' : '') + formatPrice(portfolioRealizedPnL)"></span>
-            </div>
             <div class="flex justify-between items-center pb-1">
-              <span class="text-slate-500">G/P REALIZADA (%):</span>
-              <span class="font-bold" :class="portfolioRealizedPnLPercent >= 0 ? 'text-[#00ff66] glow-green' : 'text-[#ff3b30]'" x-text="formatPercent(portfolioRealizedPnLPercent)"></span>
+              <span class="text-slate-500">RENDIMIENTO EN %:</span>
+              <span class="font-bold" :class="portfolioPnL >= 0 ? 'text-[#00ff66] glow-green' : 'text-[#ff3b30]'" x-text="formatPercent(portfolioPnLPercent)"></span>
             </div>
           </div>
         </div>
@@ -509,7 +504,7 @@
             <!-- FORMULARIO DE REGISTRO DE TRANSACCIÓN (2/5 columnas) -->
             <div class="xl:col-span-2 border border-slate-800 bg-[#0d121c] p-4 flex flex-col justify-between">
               <h2 class="text-[#00ff66] glow-green font-mono text-sm font-bold mb-3 flex items-center gap-2">
-                <span class="text-slate-500">&gt;</span> REGISTRAR OPERACIÓN
+                <span class="text-slate-500">&gt;</span> <span x-text="editingTransactionId === null ? 'REGISTRAR OPERACIÓN' : 'EDITAR OPERACIÓN'"></span>
               </h2>
               <form @submit.prevent="submitTransaction()" class="font-mono text-xs flex flex-col gap-3">
                 <div class="grid grid-cols-2 gap-3">
@@ -626,7 +621,13 @@
                   </div>
                 </div>
 
-                <button type="submit" class="term-btn uppercase font-bold py-1.5 w-full mt-1 border-[#00ff66] text-[#00ff66] hover:bg-[#141c2b]">+ REGISTRAR TRANSACCIÓN</button>
+                <div class="flex flex-col gap-2">
+                  <button type="submit" 
+                          :class="editingTransactionId === null ? 'border-[#00ff66] text-[#00ff66]' : 'border-[#00f0ff] text-[#00f0ff]'" 
+                          class="term-btn uppercase font-bold py-1.5 w-full mt-1 hover:bg-[#141c2b]"
+                          x-text="editingTransactionId === null ? '+ REGISTRAR TRANSACCIÓN' : '✔ ACTUALIZAR TRANSACCIÓN'"></button>
+                  <button type="button" @click="cancelEditTransaction()" x-show="editingTransactionId !== null" class="term-btn uppercase font-bold py-1.5 w-full border-red-500 text-red-500 hover:bg-[#ff3b30]/10" x-transition style="display: none;">✕ CANCELAR EDICIÓN</button>
+                </div>
               </form>
             </div>
 
@@ -648,7 +649,7 @@
                         <th>RATIO</th>
                         <th>TC / CANJE</th>
                         <th>PPC COMP.</th>
-                        <th class="text-center">ELIMINAR</th>
+                        <th class="text-center">ACCIONES</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -662,8 +663,9 @@
                           <td class="text-slate-400" x-text="tx.ratio"></td>
                           <td class="text-slate-400" x-text="tx.currency === 'ARS' ? (1/tx.exchange_rate).toFixed(0) : ((1 - tx.exchange_rate) * 100).toFixed(1) + '%'"></td>
                           <td class="text-slate-200" x-text="formatPrice(tx.price_comparable)"></td>
-                          <td class="text-center" @click.stop="deleteTransaction(tx.id)">
-                            <button class="text-red-500 hover:text-red-300 font-bold">[X]</button>
+                          <td class="text-center py-1 flex items-center justify-center gap-2">
+                            <button @click.stop="editTransaction(tx)" class="text-[#00f0ff] hover:text-[#5ce1e6] font-bold" title="Editar">[EDIT]</button>
+                            <button @click.stop="deleteTransaction(tx.id)" class="text-red-500 hover:text-red-300 font-bold" title="Eliminar">[X]</button>
                           </td>
                         </tr>
                       </template>

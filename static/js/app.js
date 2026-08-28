@@ -29,6 +29,7 @@ document.addEventListener('alpine:init', () => {
         portfolioRefreshIntervalId: null,
         portfolioSearchResults: [],
         portfolioSearchTimeout: null,
+        editingTransactionId: null,
         
         
         // Inline Creation State
@@ -231,7 +232,7 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // Submit new transaction
+        // Submit or update transaction
         async submitTransaction() {
             if (!this.txForm.symbol || !this.txForm.quantity || !this.txForm.price || !this.txForm.ratio || !this.txForm.exchange_input) {
                 alert('Por favor complete todos los campos obligatorios.');
@@ -268,14 +269,21 @@ document.addEventListener('alpine:init', () => {
                 notes: this.txForm.notes.trim() || null
             };
 
+            const isEditing = this.editingTransactionId !== null;
+            const url = isEditing ? `/api/transactions/${this.editingTransactionId}` : '/api/transactions';
+            const method = isEditing ? 'PUT' : 'POST';
+
             try {
-                const response = await fetch('/api/transactions', {
-                    method: 'POST',
+                const response = await fetch(url, {
+                    method: method,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
 
                 if (response.ok) {
+                    // Reset editing state
+                    this.editingTransactionId = null;
+                    
                     // Clear form but keep ratio and exchange defaults for convenience
                     this.txForm.symbol = '';
                     this.txForm.quantity = '';
@@ -292,6 +300,66 @@ document.addEventListener('alpine:init', () => {
             } catch (error) {
                 console.error('Error submitting transaction:', error);
             }
+        },
+
+        // Start editing a transaction
+        editTransaction(tx) {
+            console.log("Editing transaction:", tx);
+            this.editingTransactionId = tx.id;
+            this.txForm.symbol = tx.symbol || '';
+            this.txForm.operation_type = tx.operation_type || 'BUY';
+            this.txForm.quantity = tx.quantity || '';
+            this.txForm.price = tx.price || '';
+            this.txForm.currency = tx.currency || 'ARS';
+            this.txForm.ratio = tx.ratio || 1.0;
+            
+            if (tx.currency === 'ARS') {
+                this.txForm.exchange_input = tx.exchange_rate ? (1.0 / tx.exchange_rate).toFixed(2) : 1.0;
+            } else {
+                this.txForm.exchange_input = tx.exchange_rate ? ((1.0 - tx.exchange_rate) * 100.0).toFixed(2) : 0.0;
+            }
+            
+            if (tx.date) {
+                if (typeof tx.date === 'string' && tx.date.match(/^\d{4}-\d{2}-\d{2}/)) {
+                    this.txForm.date = tx.date.substring(0, 10);
+                } else {
+                    try {
+                        const parsedDate = new Date(tx.date);
+                        if (!isNaN(parsedDate.getTime())) {
+                            this.txForm.date = parsedDate.toISOString().split('T')[0];
+                        } else {
+                            this.txForm.date = '';
+                        }
+                    } catch (e) {
+                        console.error('Error parsing date:', e);
+                        this.txForm.date = '';
+                    }
+                }
+            } else {
+                this.txForm.date = '';
+            }
+            
+            this.txForm.notes = tx.notes || '';
+            
+            console.log("Form values loaded:", JSON.parse(JSON.stringify(this.txForm)));
+            
+            // Scroll to form smoothly
+            const formElem = document.querySelector('form');
+            if (formElem) {
+                formElem.scrollIntoView({ behavior: 'smooth' });
+            }
+        },
+
+        // Cancel editing a transaction
+        cancelEditTransaction() {
+            this.editingTransactionId = null;
+            this.txForm.symbol = '';
+            this.txForm.quantity = '';
+            this.txForm.price = '';
+            this.txForm.date = '';
+            this.txForm.notes = '';
+            this.txForm.ratio = 1.0;
+            this.txForm.exchange_input = 1300;
         },
 
         // Delete a transaction from log
@@ -955,6 +1023,29 @@ document.addEventListener('alpine:init', () => {
         get portfolioPnLPercent() {
             const cost = this.portfolioCost;
             return cost > 0 ? (this.portfolioPnL / cost * 100) : 0;
+        },
+
+        get portfolioDailyChangePercent() {
+            let currentVal = 0;
+            let prevVal = 0;
+            this.portfolioItems.forEach(item => {
+                const qty = item.acciones_equivalentes || 0;
+                const currentPrice = item.precio_afuera;
+                const prevClose = item.prev_close !== null && item.prev_close !== undefined ? item.prev_close : currentPrice;
+                
+                if (currentPrice !== null && currentPrice !== undefined) {
+                    currentVal += qty * currentPrice;
+                    prevVal += qty * prevClose;
+                } else {
+                    const cost = item.costo_total_usd || 0;
+                    currentVal += cost;
+                    prevVal += cost;
+                }
+            });
+            if (prevVal > 0) {
+                return ((currentVal - prevVal) / prevVal) * 100;
+            }
+            return 0;
         },
 
         // Helper: formatting large numbers (Market Cap)

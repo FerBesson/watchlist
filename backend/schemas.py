@@ -65,6 +65,9 @@ class TransactionBase(BaseModel):
 class TransactionCreate(TransactionBase):
     pass
 
+class TransactionUpdate(TransactionBase):
+    pass
+
 class Transaction(TransactionBase):
     id: int
     price_comparable: float
@@ -80,6 +83,7 @@ class PortfolioItem(BaseModel):
     ppc_comparable: float
     costo_total_usd: float
     precio_afuera: Optional[float] = None
+    prev_close: Optional[float] = None
     valor_actual_usd: Optional[float] = None
     pnl_usd: Optional[float] = None
     pnl_percent: Optional[float] = None

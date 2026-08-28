@@ -321,6 +321,25 @@ def read_transactions(skip: int = 0, limit: int = 100, db: Session = Depends(get
     """Get the log of transactions."""
     return crud.get_transactions(db=db, skip=skip, limit=limit)
 
+@app.put("/api/transactions/{transaction_id}", response_model=schemas.Transaction)
+def update_transaction(transaction_id: int, transaction: schemas.TransactionUpdate, db: Session = Depends(get_db)):
+    """Update an existing transaction."""
+    if transaction.operation_type not in ["BUY", "SELL"]:
+        raise HTTPException(status_code=400, detail="Operation type must be 'BUY' or 'SELL'")
+    if transaction.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be greater than zero")
+    if transaction.price <= 0:
+        raise HTTPException(status_code=400, detail="Price must be greater than zero")
+    if transaction.ratio <= 0:
+        raise HTTPException(status_code=400, detail="Ratio must be greater than zero")
+    if transaction.exchange_rate <= 0:
+        raise HTTPException(status_code=400, detail="Exchange rate must be greater than zero")
+        
+    db_tx = crud.update_transaction(db=db, tx_id=transaction_id, tx_update=transaction)
+    if not db_tx:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    return db_tx
+
 @app.delete("/api/transactions/{transaction_id}")
 def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
     """Delete a transaction by ID."""

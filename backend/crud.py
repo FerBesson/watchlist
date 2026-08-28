@@ -203,6 +203,30 @@ def create_transaction(db: Session, tx: schemas.TransactionCreate):
 def get_transactions(db: Session, skip: int = 0, limit: int = 100):
     return db.query(models.Transaction).order_by(models.Transaction.date.desc(), models.Transaction.id.desc()).offset(skip).limit(limit).all()
 
+def update_transaction(db: Session, tx_id: int, tx_update: schemas.TransactionUpdate) -> Optional[models.Transaction]:
+    db_tx = db.query(models.Transaction).filter(models.Transaction.id == tx_id).first()
+    if not db_tx:
+        return None
+    
+    symbol_formatted = tx_update.symbol.strip().upper()
+    price_comparable = tx_update.price * tx_update.ratio * tx_update.exchange_rate
+    
+    db_tx.symbol = symbol_formatted
+    db_tx.operation_type = tx_update.operation_type
+    db_tx.quantity = tx_update.quantity
+    db_tx.price = tx_update.price
+    db_tx.currency = tx_update.currency
+    db_tx.ratio = tx_update.ratio
+    db_tx.exchange_rate = tx_update.exchange_rate
+    db_tx.price_comparable = price_comparable
+    if tx_update.date is not None:
+        db_tx.date = tx_update.date
+    db_tx.notes = tx_update.notes
+    
+    db.commit()
+    db.refresh(db_tx)
+    return db_tx
+
 def delete_transaction(db: Session, tx_id: int) -> bool:
     db_tx = db.query(models.Transaction).filter(models.Transaction.id == tx_id).first()
     if db_tx:
@@ -279,6 +303,7 @@ def get_portfolio(db: Session):
         sym = item["symbol"]
         quote = quotes.get(sym, {})
         precio_afuera = quote.get("price") # Price of the stock in US (USD)
+        prev_close = quote.get("prev_close")
         
         valor_actual_usd = None
         pnl_usd = None
@@ -296,6 +321,7 @@ def get_portfolio(db: Session):
             "ppc_comparable": item["ppc_comparable"],
             "costo_total_usd": item["costo_total_usd"],
             "precio_afuera": precio_afuera,
+            "prev_close": prev_close,
             "valor_actual_usd": valor_actual_usd,
             "pnl_usd": pnl_usd,
             "pnl_percent": pnl_percent
