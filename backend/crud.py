@@ -242,9 +242,28 @@ def get_portfolio(db: Session):
     portfolio = {}
     realized_pnl = 0.0
     realized_pnl_cost = 0.0
+    closed_trades = []
+    cash_balance = 0.0
     
-    for tx in txs:
+    # Find chronological index of the first CASH transaction
+    first_cash_idx = None
+    for idx, tx in enumerate(txs):
+        if tx.symbol.upper() == "CASH":
+            first_cash_idx = idx
+            break
+    
+    for idx, tx in enumerate(txs):
         symbol = tx.symbol.upper()
+        cant_acciones = tx.quantity / tx.ratio
+        monto_transaccion_usd = cant_acciones * tx.price_comparable
+        
+        if symbol == "CASH":
+            if tx.operation_type == "BUY":
+                cash_balance += monto_transaccion_usd
+            elif tx.operation_type == "SELL":
+                cash_balance = max(0.0, cash_balance - monto_transaccion_usd)
+            continue
+            
         if symbol not in portfolio:
             portfolio[symbol] = {
                 "symbol": symbol,
@@ -256,7 +275,6 @@ def get_portfolio(db: Session):
             }
         
         p = portfolio[symbol]
-        cant_acciones = tx.quantity / tx.ratio
         
         if tx.operation_type == "BUY":
             nuevas_acciones = p["acciones_equivalentes"] + cant_acciones
@@ -266,6 +284,11 @@ def get_portfolio(db: Session):
             p["vn_total"] += tx.quantity
             p["costo_total_usd"] = p["acciones_equivalentes"] * p["ppc_comparable"]
             p["ratio"] = tx.ratio
+            
+            # Decrease cash balance by buy cost ONLY if after or at the first CASH transaction
+            if first_cash_idx is not None and idx >= first_cash_idx:
+                cash_balance -= monto_transaccion_usd
+            
         elif tx.operation_type == "SELL":
             # Realized P&L is: cant_acciones * (precio_venta_comparable - ppc_previo)
             pnl_venta = cant_acciones * (tx.price_comparable - p["ppc_comparable"])
@@ -275,6 +298,19 @@ def get_portfolio(db: Session):
             costo_venta = cant_acciones * p["ppc_comparable"]
             realized_pnl_cost += costo_venta
             
+            # Record closed trade
+            if p["acciones_equivalentes"] > 0:
+                pnl_percent = ((tx.price_comparable - p["ppc_comparable"]) / p["ppc_comparable"] * 100) if p["ppc_comparable"] > 0 else 0.0
+                closed_trades.append({
+                    "symbol": symbol,
+                    "quantity": cant_acciones,
+                    "ppc_comparable": p["ppc_comparable"],
+                    "price_comparable": tx.price_comparable,
+                    "pnl_usd": pnl_venta,
+                    "pnl_percent": pnl_percent,
+                    "date": tx.date
+                })
+            
             p["acciones_equivalentes"] = max(0.0, p["acciones_equivalentes"] - cant_acciones)
             p["vn_total"] = max(0.0, p["vn_total"] - tx.quantity)
             p["costo_total_usd"] = p["acciones_equivalentes"] * p["ppc_comparable"]
@@ -283,49 +319,108 @@ def get_portfolio(db: Session):
                 p["vn_total"] = 0.0
                 p["costo_total_usd"] = 0.0
                 
+            # Increase cash balance by sell revenue ONLY if after or at the first CASH transaction
+            if first_cash_idx is not None and idx >= first_cash_idx:
+                cash_balance += monto_transaccion_usd
+                
     # Calculate realized percentage
     realized_pnl_percent = (realized_pnl / realized_pnl_cost * 100) if realized_pnl_cost > 0 else 0.0
+    
+    # Calculate performance metrics
+    total_trades = len(closed_trades)
+    winning_trades = sum(1 for t in closed_trades if t["pnl_usd"] > 0)
+    losing_trades = sum(1 for t in closed_trades if t["pnl_usd"] < 0)
+    
+    win_rate = (winning_trades / total_trades * 100) if total_trades > 0 else 0.0
+    
+    gross_gains = sum(t["pnl_usd"] for t in closed_trades if t["pnl_usd"] > 0)
+    gross_losses = sum(abs(t["pnl_usd"]) for t in closed_trades if t["pnl_usd"] < 0)
+    
+    profit_factor = (gross_gains / gross_losses) if gross_losses > 0 else (gross_gains if gross_gains > 0 else 1.0)
+    if gross_losses == 0 and gross_gains > 0:
+        profit_factor = 99.9
+        
+    avg_win = (gross_gains / winning_trades) if winning_trades > 0 else 0.0
+    avg_loss = (-gross_losses / losing_trades) if losing_trades > 0 else 0.0
+    win_loss_ratio = (avg_win / abs(avg_loss)) if avg_loss != 0 else 0.0
+    
+    largest_win = max((t["pnl_usd"] for t in closed_trades if t["pnl_usd"] > 0), default=0.0)
+    largest_loss = min((t["pnl_usd"] for t in closed_trades if t["pnl_usd"] < 0), default=0.0)
+    
+    metrics = {
+        "total_trades": total_trades,
+        "winning_trades": winning_trades,
+        "losing_trades": losing_trades,
+        "win_rate": win_rate,
+        "profit_factor": profit_factor,
+        "avg_win": avg_win,
+        "avg_loss": avg_loss,
+        "win_loss_ratio": win_loss_ratio,
+        "largest_win": largest_win,
+        "largest_loss": largest_loss
+    }
     
     # Filter only active positions (VN > 0)
     active_portfolio = [item for item in portfolio.values() if item["vn_total"] > 0]
     
-    if not active_portfolio:
-        return {"items": [], "realized_pnl": realized_pnl, "realized_pnl_percent": realized_pnl_percent}
-        
-    # Fetch real-time quotes from Yahoo Finance for the active underlying symbols
-    symbols = [item["symbol"] for item in active_portfolio]
-    from .finance import finance_client
-    quotes = finance_client.get_quotes(symbols)
-    
-    # Calculate current values and unrealized PnL
     result = []
-    for item in active_portfolio:
-        sym = item["symbol"]
-        quote = quotes.get(sym, {})
-        precio_afuera = quote.get("price") # Price of the stock in US (USD)
-        prev_close = quote.get("prev_close")
+    if active_portfolio:
+        # Fetch real-time quotes from Yahoo Finance for the active underlying symbols
+        symbols = [item["symbol"] for item in active_portfolio]
+        from .finance import finance_client
+        quotes = finance_client.get_quotes(symbols)
         
-        valor_actual_usd = None
-        pnl_usd = None
-        pnl_percent = None
-        
-        if precio_afuera is not None:
-            valor_actual_usd = item["acciones_equivalentes"] * precio_afuera
-            pnl_usd = valor_actual_usd - item["costo_total_usd"]
-            pnl_percent = (pnl_usd / item["costo_total_usd"] * 100) if item["costo_total_usd"] > 0 else 0.0
+        # Calculate current values and unrealized PnL
+        for item in active_portfolio:
+            sym = item["symbol"]
+            quote = quotes.get(sym, {})
+            precio_afuera = quote.get("price") # Price of the stock in US (USD)
+            prev_close = quote.get("prev_close")
             
+            valor_actual_usd = None
+            pnl_usd = None
+            pnl_percent = None
+            
+            if precio_afuera is not None:
+                valor_actual_usd = item["acciones_equivalentes"] * precio_afuera
+                pnl_usd = valor_actual_usd - item["costo_total_usd"]
+                pnl_percent = (pnl_usd / item["costo_total_usd"] * 100) if item["costo_total_usd"] > 0 else 0.0
+                
+            result.append({
+                "symbol": sym,
+                "vn_total": item["vn_total"],
+                "acciones_equivalentes": item["acciones_equivalentes"],
+                "ppc_comparable": item["ppc_comparable"],
+                "costo_total_usd": item["costo_total_usd"],
+                "precio_afuera": precio_afuera,
+                "prev_close": prev_close,
+                "valor_actual_usd": valor_actual_usd,
+                "pnl_usd": pnl_usd,
+                "pnl_percent": pnl_percent
+            })
+            
+    if cash_balance != 0.0:
         result.append({
-            "symbol": sym,
-            "vn_total": item["vn_total"],
-            "acciones_equivalentes": item["acciones_equivalentes"],
-            "ppc_comparable": item["ppc_comparable"],
-            "costo_total_usd": item["costo_total_usd"],
-            "precio_afuera": precio_afuera,
-            "prev_close": prev_close,
-            "valor_actual_usd": valor_actual_usd,
-            "pnl_usd": pnl_usd,
-            "pnl_percent": pnl_percent
+            "symbol": "CASH",
+            "vn_total": cash_balance,
+            "acciones_equivalentes": cash_balance,
+            "ppc_comparable": 1.0,
+            "costo_total_usd": cash_balance,
+            "precio_afuera": 1.0,
+            "prev_close": 1.0,
+            "valor_actual_usd": cash_balance,
+            "pnl_usd": 0.0,
+            "pnl_percent": 0.0
         })
+
+    # Sort closed trades by date descending
+    closed_trades.sort(key=lambda x: x["date"], reverse=True)
         
-    return {"items": result, "realized_pnl": realized_pnl, "realized_pnl_percent": realized_pnl_percent}
+    return {
+        "items": result, 
+        "realized_pnl": realized_pnl, 
+        "realized_pnl_percent": realized_pnl_percent,
+        "metrics": metrics,
+        "closed_trades": closed_trades
+    }
 

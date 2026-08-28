@@ -1,6 +1,6 @@
 import os
 from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, Query, status
+from fastapi import FastAPI, Depends, HTTPException, Query, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -340,6 +340,13 @@ def update_transaction(transaction_id: int, transaction: schemas.TransactionUpda
         raise HTTPException(status_code=404, detail="Transaction not found")
     return db_tx
 
+@app.delete("/api/transactions")
+def delete_all_transactions(db: Session = Depends(get_db)):
+    """Delete all transactions in the database."""
+    num_deleted = db.query(models.Transaction).delete()
+    db.commit()
+    return {"message": "All transactions deleted successfully", "count": num_deleted}
+
 @app.delete("/api/transactions/{transaction_id}")
 def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
     """Delete a transaction by ID."""
@@ -352,6 +359,155 @@ def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
 def read_portfolio(db: Session = Depends(get_db)):
     """Get the consolidated portfolio with real-time stock prices from Yahoo Finance."""
     return crud.get_portfolio(db=db)
+
+
+@app.post("/api/transactions/import")
+def import_transactions(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Import transactions from an Excel file."""
+    import pandas as pd
+    from io import BytesIO
+    
+    if not (file.filename.endswith(".xlsx") or file.filename.endswith(".xls")):
+        raise HTTPException(status_code=400, detail="El archivo debe ser un Excel (.xlsx o .xls)")
+        
+    try:
+        contents = file.file.read()
+        df = pd.read_excel(BytesIO(contents))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error al leer el archivo Excel: {e}")
+        
+    # Map column headers to expected keys
+    col_map = {}
+    for col in df.columns:
+        col_clean = ''.join(c for c in str(col) if c.isalnum() or c == ' ').lower().strip()
+        if 'operac' in col_clean:
+            col_map['operation'] = col
+        elif 'concert' in col_clean or 'fecha' in col_clean:
+            col_map['date'] = col
+        elif 'descrip' in col_clean or 'ticker' in col_clean:
+            col_map['symbol'] = col
+        elif 'moneda' in col_clean:
+            col_map['currency'] = col
+        elif 'cant' in col_clean:
+            col_map['quantity'] = col
+        elif 'prec' in col_clean:
+            col_map['price'] = col
+            
+    required = ['operation', 'date', 'symbol', 'currency', 'quantity', 'price']
+    missing = [req for req in required if req not in col_map]
+    if missing:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"No se pudieron encontrar las columnas requeridas: {', '.join(missing)}. "
+                   f"Columnas detectadas: {list(df.columns)}"
+        )
+        
+    imported_count = 0
+    skipped_count = 0
+    
+    from .finance import cedear_ratios
+    from .exchange import get_rates_for_date
+    
+    for idx, row in df.iterrows():
+        try:
+            # Operation Type
+            raw_op = str(row[col_map['operation']]).strip().upper()
+            if 'COMPRA' in raw_op or 'BUY' in raw_op:
+                op_type = 'BUY'
+            elif 'VENTA' in raw_op or 'SELL' in raw_op:
+                op_type = 'SELL'
+            else:
+                continue
+                
+            # Date
+            raw_date = row[col_map['date']]
+            if pd.isnull(raw_date):
+                continue
+            date_dt = pd.to_datetime(raw_date)
+            date_val = date_dt.to_pydatetime()
+            
+            # Symbol
+            raw_symbol = str(row[col_map['symbol']]).strip().upper()
+            sym_clean = raw_symbol[:-3] if raw_symbol.endswith(".BA") else raw_symbol
+            
+            info = cedear_ratios.get(sym_clean)
+            if info:
+                ratio = info["ratio"]
+                symbol = info["symbol_origin"]
+            else:
+                ratio = 1.0
+                symbol = sym_clean
+                
+            # Currency
+            raw_currency = str(row[col_map['currency']]).strip().upper()
+            if 'ARS' in raw_currency or 'PESO' in raw_currency:
+                currency = 'ARS'
+            elif 'USD' in raw_currency or 'DOLAR' in raw_currency or 'DÓLAR' in raw_currency or 'MEP' in raw_currency:
+                currency = 'USD'
+            else:
+                currency = 'ARS'  # fallback
+                
+            # Quantity
+            quantity = float(row[col_map['quantity']])
+            if pd.isnull(quantity) or quantity <= 0:
+                continue
+                
+            # Price
+            price = float(row[col_map['price']])
+            if pd.isnull(price) or price <= 0:
+                continue
+                
+            # Check duplicates (comparing date part)
+            candidates = db.query(models.Transaction).filter(
+                models.Transaction.symbol == symbol,
+                models.Transaction.operation_type == op_type,
+                models.Transaction.quantity == quantity,
+                models.Transaction.price == price,
+                models.Transaction.currency == currency
+            ).all()
+            
+            is_duplicate = False
+            for cand in candidates:
+                if cand.date.date() == date_val.date():
+                    is_duplicate = True
+                    break
+                    
+            if is_duplicate:
+                skipped_count += 1
+                continue
+                
+            # Get exchange rate for the date
+            target_date, mep, ccl, source = get_rates_for_date(date_val.strftime("%Y-%m-%d"))
+            
+            if currency == "ARS":
+                exchange_rate = 1.0 / ccl if ccl and ccl > 0 else 1.0 / 1350.0
+            else:
+                exchange_rate = mep / ccl if mep and ccl and ccl > 0 else 1300.0 / 1350.0
+                
+            price_comparable = price * ratio * exchange_rate
+            
+            db_tx = models.Transaction(
+                symbol=symbol,
+                operation_type=op_type,
+                quantity=quantity,
+                price=price,
+                currency=currency,
+                ratio=ratio,
+                exchange_rate=exchange_rate,
+                price_comparable=price_comparable,
+                date=date_val,
+                notes="Importado desde Excel"
+            )
+            db.add(db_tx)
+            imported_count += 1
+        except Exception as row_err:
+            print(f"[Import] Error processing row {idx}: {row_err}")
+            continue
+            
+    if imported_count > 0:
+        db.commit()
+        
+    return {"imported": imported_count, "skipped": skipped_count}
 
 
 
@@ -386,6 +542,38 @@ def get_cedear_info(symbol: str):
     
     # Return 1.0 ratio by default
     return {"ratio": 1.0, "symbol": sym_clean, "symbol_origin": sym_clean}
+
+
+@app.get("/api/exchange-rate")
+def get_exchange_rate(
+    date: Optional[str] = Query(None, description="Fecha de operación (YYYY-MM-DD)"),
+    currency: str = Query("ARS", description="Moneda de pago ('ARS' o 'USD')")
+):
+    """Obtener cotizaciones de MEP, CCL y calcular el valor del tipo de cambio / canje para la fecha dada."""
+    from .exchange import get_rates_for_date
+    
+    target_date, mep, ccl, source = get_rates_for_date(date)
+    
+    # Calcular el valor que debe ver el input en la UI
+    exchange_rate_input = 1.0
+    if currency == "USD":
+        # Canje MEP-CCL en porcentaje: (1 - mep/ccl) * 100
+        if ccl and mep and ccl > 0:
+            exchange_rate_input = round((1.0 - (mep / ccl)) * 100.0, 2)
+        else:
+            exchange_rate_input = 0.0
+    else:
+        # Dólar CCL nominal para ARS
+        exchange_rate_input = round(ccl, 2) if ccl else 1.0
+        
+    return {
+        "date": target_date.strftime("%Y-%m-%d"),
+        "mep": round(mep, 2) if mep else None,
+        "ccl": round(ccl, 2) if ccl else None,
+        "exchange_rate_input": exchange_rate_input,
+        "currency": currency,
+        "source": source
+    }
 
 
 # --- SERVING STATIC FRONTEND ---

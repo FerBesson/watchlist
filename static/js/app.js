@@ -13,6 +13,19 @@ document.addEventListener('alpine:init', () => {
         portfolioItems: [],
         portfolioRealizedPnL: 0.0,
         portfolioRealizedPnLPercent: 0.0,
+        portfolioMetrics: {
+            total_trades: 0,
+            winning_trades: 0,
+            losing_trades: 0,
+            win_rate: 0.0,
+            profit_factor: 1.0,
+            avg_win: 0.0,
+            avg_loss: 0.0,
+            win_loss_ratio: 0.0,
+            largest_win: 0.0,
+            largest_loss: 0.0
+        },
+        closedTrades: [],
         transactions: [],
         isPortfolioLoading: false,
         txForm: {
@@ -30,8 +43,7 @@ document.addEventListener('alpine:init', () => {
         portfolioSearchResults: [],
         portfolioSearchTimeout: null,
         editingTransactionId: null,
-        
-        
+        isImporting: false,
         // Inline Creation State
         isCreatingWatchlist: false,
         newWatchlistInputName: '',
@@ -55,6 +67,7 @@ document.addEventListener('alpine:init', () => {
         selectedStock: null,
         chartRange: '1mo',
         chartInstance: null,
+        portfolioTreemapInstance: null,
         sortableInstance: null,
         watchlistSortableInstance: null,
         
@@ -81,6 +94,13 @@ document.addEventListener('alpine:init', () => {
             this.isLoading = true;
             await this.fetchWatchlists();
             this.isLoading = false;
+
+            // Fetch initial exchange rate
+            await this.fetchExchangeRate();
+
+            // Watch for changes in date or currency to update exchange rate
+            this.$watch('txForm.date', () => this.fetchExchangeRate());
+            this.$watch('txForm.currency', () => this.fetchExchangeRate());
         },
 
         // Fetch all watchlists
@@ -214,6 +234,11 @@ document.addEventListener('alpine:init', () => {
                     this.portfolioItems = data.items;
                     this.portfolioRealizedPnL = data.realized_pnl;
                     this.portfolioRealizedPnLPercent = data.realized_pnl_percent;
+                    if (data.metrics) this.portfolioMetrics = data.metrics;
+                    if (data.closed_trades) this.closedTrades = data.closed_trades;
+                    this.$nextTick(() => {
+                        this.renderPortfolioTreemap();
+                    });
                 }
             } catch (error) {
                 console.error('Error fetching portfolio:', error);
@@ -359,7 +384,7 @@ document.addEventListener('alpine:init', () => {
             this.txForm.date = '';
             this.txForm.notes = '';
             this.txForm.ratio = 1.0;
-            this.txForm.exchange_input = 1300;
+            this.fetchExchangeRate();
         },
 
         // Delete a transaction from log
@@ -379,6 +404,64 @@ document.addEventListener('alpine:init', () => {
                 }
             } catch (error) {
                 console.error('Error deleting transaction:', error);
+            }
+        },
+
+        // Import transactions from an Excel file
+        async importExcel(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            // Reset input value so it triggers change event if same file is selected again
+            event.target.value = '';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            this.isImporting = true;
+            try {
+                const response = await fetch('/api/transactions/import', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(`Importación completada:\n- Creadas: ${result.imported}\n- Duplicadas (omitidas): ${result.skipped}`);
+                    // Reload data
+                    await Promise.all([this.fetchPortfolio(), this.fetchTransactions()]);
+                } else {
+                    const err = await response.json();
+                    alert(`Error de importación: ${err.detail || 'No se pudo procesar el archivo Excel'}`);
+                }
+            } catch (error) {
+                console.error('Error importing Excel:', error);
+                alert('Error al intentar subir o procesar el archivo Excel.');
+            } finally {
+                this.isImporting = false;
+            }
+        },
+
+        // Delete all transactions from log
+        async deleteAllTransactions() {
+            if (!confirm('¿Está absolutamente seguro de eliminar TODAS las transacciones registradas? Esta acción es irreversible y vaciará tu cartera.')) {
+                return;
+            }
+            try {
+                const response = await fetch('/api/transactions', {
+                    method: 'DELETE'
+                });
+                if (response.ok) {
+                    const result = await response.json();
+                    alert(`Éxito: Se han eliminado las ${result.count} transacciones.`);
+                    await Promise.all([this.fetchPortfolio(), this.fetchTransactions()]);
+                } else {
+                    const err = await response.json();
+                    alert(`Error: ${err.detail || 'No se pudieron eliminar las operaciones'}`);
+                }
+            } catch (error) {
+                console.error('Error deleting all transactions:', error);
+                alert('Error al intentar eliminar las transacciones.');
             }
         },
 
@@ -576,8 +659,17 @@ document.addEventListener('alpine:init', () => {
         // Autocomplete Search for Portfolio Transactions
         searchPortfolioStocks() {
             if (this.portfolioSearchTimeout) clearTimeout(this.portfolioSearchTimeout);
-            if (!this.txForm.symbol.trim()) {
+            const term = this.txForm.symbol.trim().toUpperCase();
+            if (!term) {
                 this.portfolioSearchResults = [];
+                return;
+            }
+
+            if (term === "CASH") {
+                this.portfolioSearchResults = [];
+                this.txForm.price = 1.0;
+                this.txForm.ratio = 1.0;
+                this.fetchExchangeRate();
                 return;
             }
 
@@ -598,6 +690,13 @@ document.addEventListener('alpine:init', () => {
             this.txForm.symbol = symbol;
             this.portfolioSearchResults = [];
             
+            if (symbol.toUpperCase() === "CASH") {
+                this.txForm.price = 1.0;
+                this.txForm.ratio = 1.0;
+                this.fetchExchangeRate();
+                return;
+            }
+            
             try {
                 const response = await fetch(`/api/cedear-info/${symbol}`);
                 if (response.ok) {
@@ -611,6 +710,33 @@ document.addEventListener('alpine:init', () => {
                 }
             } catch (error) {
                 console.error('Error fetching Cedear info:', error);
+            }
+        },
+
+        // Fetch automated exchange rate from backend
+        async fetchExchangeRate() {
+            const dateStr = this.txForm.date || '';
+            const currency = this.txForm.currency || 'ARS';
+            // Debounce or validate incomplete date string if user typing manually
+            if (dateStr && dateStr.length < 10) return;
+            
+            try {
+                const response = await fetch(`/api/exchange-rate?date=${encodeURIComponent(dateStr)}&currency=${encodeURIComponent(currency)}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.exchange_rate_input !== undefined) {
+                        this.txForm.exchange_input = data.exchange_rate_input;
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching exchange rate:', error);
+            }
+        },
+
+        // Auto-configure exchange rate for cash transactions on currency changes
+        onCurrencyChange() {
+            if (this.txForm.symbol.trim().toUpperCase() === "CASH") {
+                this.fetchExchangeRate();
             }
         },
 
@@ -1000,6 +1126,138 @@ document.addEventListener('alpine:init', () => {
                     }
                 }
             });
+        },
+
+        // Render Portfolio distribution Treemap (Heatmap)
+        renderPortfolioTreemap() {
+            const container = document.getElementById('portfolioTreemap');
+            if (!container) return;
+
+            // Destroy previous instance if it exists
+            if (this.portfolioTreemapInstance) {
+                this.portfolioTreemapInstance.destroy();
+                this.portfolioTreemapInstance = null;
+            }
+
+            // Filter items with valid value and compute total
+            const items = this.portfolioItems.filter(item => item.valor_actual_usd && item.valor_actual_usd !== 0);
+            
+            if (items.length === 0) {
+                container.innerHTML = `<div class="text-slate-500 font-mono text-xs text-center py-12">[ SIN POSICIONES ACTIVAS ]</div>`;
+                return;
+            }
+            
+            // Calculate total for percentage calculation
+            const totalValue = items.reduce((acc, item) => acc + Math.abs(item.valor_actual_usd), 0);
+
+            // Prepare series data for ApexCharts Treemap
+            const data = items.map(item => {
+                const val = Math.abs(item.valor_actual_usd);
+                const pct = ((val / totalValue) * 100).toFixed(1);
+                
+                // Color mapping based on unrealized P&L percent
+                let color = '#475569'; // Slate-600 (neutral/CASH)
+                if (item.symbol !== 'CASH' && item.pnl_percent !== null) {
+                    if (item.pnl_percent > 5.0) {
+                        color = '#10b981'; // emerald-500 (bright green)
+                    } else if (item.pnl_percent > 0.0) {
+                        color = '#047857'; // emerald-700 (dark green)
+                    } else if (item.pnl_percent < -5.0) {
+                        color = '#ef4444'; // red-500 (bright red)
+                    } else if (item.pnl_percent < 0.0) {
+                        color = '#b91c1c'; // red-700 (dark red)
+                    }
+                }
+                
+                return {
+                    x: `${item.symbol} (${pct}%)`,
+                    y: val,
+                    fillColor: color,
+                    pnl: item.pnl_percent,
+                    pnlUsd: item.pnl_usd,
+                    rawSymbol: item.symbol,
+                    qty: item.acciones_equivalentes
+                };
+            });
+
+            // Sort data descending by value
+            data.sort((a, b) => b.y - a.y);
+
+            const options = {
+                series: [{
+                    data: data
+                }],
+                legend: {
+                    show: false
+                },
+                chart: {
+                    height: '100%',
+                    type: 'treemap',
+                    toolbar: {
+                        show: false
+                    },
+                    background: 'transparent'
+                },
+                stroke: {
+                    show: true,
+                    width: 1.5,
+                    colors: ['#0d121c'] // Match card background
+                },
+                title: {
+                    show: false
+                },
+                plotOptions: {
+                    treemap: {
+                        enableShades: false,
+                        distributed: true,
+                        useFillColorAsStroke: false
+                    }
+                },
+                dataLabels: {
+                    enabled: true,
+                    style: {
+                        fontSize: '11px',
+                        fontFamily: 'Fira Code, monospace',
+                        fontWeight: 'bold',
+                        colors: ['#ffffff']
+                    },
+                    formatter: function(text, op) {
+                        return text;
+                    },
+                    offsetY: -2
+                },
+                tooltip: {
+                    enabled: true,
+                    theme: 'dark',
+                    custom: function({ series, seriesIndex, dataPointIndex, w }) {
+                        const point = w.config.series[seriesIndex].data[dataPointIndex];
+                        const valStr = point.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        
+                        let pnlText = '0.00%';
+                        let pnlClass = 'text-slate-400';
+                        if (point.rawSymbol !== 'CASH' && point.pnl !== null) {
+                            const sign = point.pnl >= 0 ? '+' : '';
+                            pnlText = `${sign}${point.pnl.toFixed(2)}%`;
+                            pnlClass = point.pnl >= 0 ? 'text-[#00ff66]' : 'text-[#ff3b30]';
+                        } else if (point.rawSymbol === 'CASH') {
+                            pnlText = 'Neutral';
+                            pnlClass = 'text-slate-400';
+                        }
+                        
+                        return `
+                            <div class="p-3 bg-[#0d121c] border border-slate-800 font-mono text-[11px] text-left" style="border-radius: 4px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.5);">
+                                <div class="font-bold text-[#00f0ff] mb-1.5">&gt; ${point.rawSymbol}</div>
+                                <div class="mb-1 text-slate-300">Valor: <span class="text-slate-100 font-bold">$${valStr}</span></div>
+                                <div class="mb-1 text-slate-300">Rendimiento: <span class="${pnlClass} font-bold">${pnlText}</span></div>
+                                <div class="text-slate-400 text-[10px]">Nominal: ${point.qty.toLocaleString()}</div>
+                            </div>
+                        `;
+                    }
+                }
+            };
+
+            this.portfolioTreemapInstance = new ApexCharts(container, options);
+            this.portfolioTreemapInstance.render();
         },
 
         // Getters reactivos para totales del portafolio

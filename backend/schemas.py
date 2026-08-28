@@ -92,10 +92,41 @@ class PortfolioItem(BaseModel):
         from_attributes = True
 
 
+class PerformanceMetrics(BaseModel):
+    total_trades: int
+    winning_trades: int
+    losing_trades: int
+    win_rate: float
+    profit_factor: float
+    avg_win: float
+    avg_loss: float
+    win_loss_ratio: float
+    largest_win: float
+    largest_loss: float
+
+    class Config:
+        from_attributes = True
+
+
+class ClosedTrade(BaseModel):
+    symbol: str
+    quantity: float
+    ppc_comparable: float
+    price_comparable: float
+    pnl_usd: float
+    pnl_percent: float
+    date: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class PortfolioResponse(BaseModel):
     items: List[PortfolioItem]
     realized_pnl: float
     realized_pnl_percent: float
+    metrics: PerformanceMetrics
+    closed_trades: List[ClosedTrade]
 
     class Config:
         from_attributes = True

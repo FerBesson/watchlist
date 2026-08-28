@@ -3,3 +3,4 @@ uvicorn
 sqlalchemy
 requests
 pydantic
+python-multipart

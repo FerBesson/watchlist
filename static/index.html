@@ -10,6 +10,10 @@
   <link rel="stylesheet" href="/static/css/style.css">
   <!-- SortableJS CDN for Drag and Drop -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- ApexCharts CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
   <!-- Custom JS Application -->
   <script defer src="/static/js/app.js?v=4.0"></script>
   <!-- Alpine.js CDN -->
@@ -156,6 +160,50 @@
             <div class="flex justify-between items-center pb-1">
               <span class="text-slate-500">RENDIMIENTO EN %:</span>
               <span class="font-bold" :class="portfolioPnL >= 0 ? 'text-[#00ff66] glow-green' : 'text-[#ff3b30]'" x-text="formatPercent(portfolioPnLPercent)"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PORTFOLIO PERFORMANCE METRICS PANEL -->
+      <div x-show="activeView === 'portfolio'" class="border border-slate-800 bg-[#0d121c] p-4 flex flex-col justify-between h-fit font-mono text-xs mt-2">
+        <div>
+          <h2 class="text-slate-400 text-xs font-bold uppercase mb-4">&gt; RENDIMIENTO HISTÓRICO</h2>
+          <div class="flex flex-col gap-3">
+            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
+              <span class="text-slate-500">TASA ACIERTO (WIN RATE):</span>
+              <span class="font-bold text-[#00ff66] glow-green" x-text="formatPercent(portfolioMetrics.win_rate)"></span>
+            </div>
+            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
+              <span class="text-slate-500">FACTOR BENEFICIO (PF):</span>
+              <span class="font-bold" :class="portfolioMetrics.profit_factor >= 1.5 ? 'text-[#00ff66] glow-green' : (portfolioMetrics.profit_factor >= 1.0 ? 'text-[#00f0ff]' : 'text-[#ff3b30]')" x-text="portfolioMetrics.profit_factor.toFixed(2)"></span>
+            </div>
+            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
+              <span class="text-slate-500">OPERACIONES CERRADAS:</span>
+              <div class="flex items-center gap-1 font-bold text-slate-200">
+                <span x-text="portfolioMetrics.total_trades"></span>
+                <span class="text-slate-500 text-[10px]" x-text="'(' + portfolioMetrics.winning_trades + ' G / ' + portfolioMetrics.losing_trades + ' P)'"></span>
+              </div>
+            </div>
+            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
+              <span class="text-slate-500">GANANCIA / PÉRDIDA PROM.:</span>
+              <div class="flex items-center gap-1">
+                <span class="text-[#00ff66] font-bold" x-text="formatPrice(portfolioMetrics.avg_win)"></span>
+                <span class="text-slate-600">/</span>
+                <span class="text-[#ff3b30] font-bold" x-text="formatPrice(portfolioMetrics.avg_loss)"></span>
+              </div>
+            </div>
+            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
+              <span class="text-slate-500">RELACIÓN G/P PROM.:</span>
+              <span class="font-bold text-slate-200" x-text="portfolioMetrics.win_loss_ratio.toFixed(2)"></span>
+            </div>
+            <div class="flex justify-between items-center pb-1">
+              <span class="text-slate-500">MAX GANANCIA / PÉRDIDA:</span>
+              <div class="flex items-center gap-1">
+                <span class="text-[#00ff66] font-bold" x-text="formatPrice(portfolioMetrics.largest_win)"></span>
+                <span class="text-slate-600">/</span>
+                <span class="text-[#ff3b30] font-bold" x-text="formatPrice(portfolioMetrics.largest_loss)"></span>
+              </div>
             </div>
           </div>
         </div>
@@ -452,50 +500,65 @@
       <template x-if="activeView === 'portfolio'">
         <div class="flex flex-col gap-4 w-full flex-grow">
           
-          <!-- TABLA DE TENENCIAS CONSOLIDADAS -->
-          <div class="border border-slate-800 bg-[#0d121c] p-4 flex flex-col min-h-[220px]">
-            <h2 class="text-[#00ff66] glow-green font-mono text-sm font-bold mb-3 flex items-center gap-2">
-              <span class="text-slate-500">&gt;</span> TENENCIAS CONSOLIDADAS (PPC)
-            </h2>
-            <div class="overflow-x-auto flex-grow">
-              <table class="w-full term-table font-mono text-left text-xs">
-                <thead>
-                  <tr class="border-b border-slate-800 pb-2">
-                    <th class="py-2">TICKER (EXT)</th>
-                    <th>NOMINAL (VN)</th>
-                    <th>ACC. EQUIV.</th>
-                    <th>PPC COMP. (USD)</th>
-                    <th>VALOR INVERTIDO (USD)</th>
-                    <th>PRECIO AFUERA (USD)</th>
-                    <th>VALOR ACTUAL (USD)</th>
-                    <th>G/P LATENTE (USD)</th>
-                    <th>RENDIMIENTO</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <template x-for="item in portfolioItems" :key="item.symbol">
-                    <tr class="hover:bg-[#141c2b] border-b border-slate-900">
-                      <td class="font-bold text-[#00f0ff] py-2" x-text="item.symbol"></td>
-                      <td class="text-slate-300" x-text="item.vn_total.toLocaleString()"></td>
-                      <td class="text-slate-400" x-text="item.acciones_equivalentes % 1 === 0 ? item.acciones_equivalentes.toFixed(0) : item.acciones_equivalentes.toFixed(2)"></td>
-                      <td class="text-slate-300" x-text="formatPrice(item.ppc_comparable)"></td>
-                      <td class="text-slate-400" x-text="formatPrice(item.costo_total_usd)"></td>
-                      <td class="text-slate-200 font-bold" x-text="formatPrice(item.precio_afuera)"></td>
-                      <td class="text-[#00f0ff]" x-text="formatPrice(item.valor_actual_usd)"></td>
-                      <td class="font-bold" :class="item.pnl_usd >= 0 ? 'text-[#00ff66]' : 'text-[#ff3b30]'" x-text="(item.pnl_usd >= 0 ? '+' : '') + formatPrice(item.pnl_usd)"></td>
-                      <td class="font-bold" :class="item.pnl_percent >= 0 ? 'text-[#00ff66]' : 'text-[#ff3b30]'" x-text="formatPercent(item.pnl_percent)"></td>
+          <!-- SECCIÓN SUPERIOR: TENENCIAS + DISTRIBUCIÓN -->
+          <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            
+            <!-- TABLA DE TENENCIAS CONSOLIDADAS (3/5 columnas) -->
+            <div class="lg:col-span-3 border border-slate-800 bg-[#0d121c] p-4 flex flex-col min-h-[220px]">
+              <h2 class="text-[#00ff66] glow-green font-mono text-sm font-bold mb-3 flex items-center gap-2">
+                <span class="text-slate-500">&gt;</span> TENENCIAS CONSOLIDADAS (PPC)
+              </h2>
+              <div class="overflow-x-auto flex-grow">
+                <table class="w-full term-table font-mono text-left text-xs">
+                  <thead>
+                    <tr class="border-b border-slate-800 pb-2">
+                      <th class="py-2">TICKER (EXT)</th>
+                      <th>NOMINAL (VN)</th>
+                      <th>ACC. EQUIV.</th>
+                      <th>PPC COMP. (USD)</th>
+                      <th>VALOR INVERTIDO (USD)</th>
+                      <th>PRECIO AFUERA (USD)</th>
+                      <th>VALOR ACTUAL (USD)</th>
+                      <th>G/P LATENTE (USD)</th>
+                      <th>RENDIMIENTO</th>
                     </tr>
-                  </template>
-                  <template x-if="portfolioItems.length === 0">
-                    <tr>
-                      <td colspan="9" class="text-slate-500 text-center py-8 italic">
-                        No hay tenencias activas. Registra una operación de compra abajo para comenzar.
-                      </td>
-                    </tr>
-                  </template>
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    <template x-for="item in portfolioItems" :key="item.symbol">
+                      <tr class="hover:bg-[#141c2b] border-b border-slate-900">
+                        <td class="font-bold text-[#00f0ff] py-2" x-text="item.symbol"></td>
+                        <td class="text-slate-300" x-text="item.vn_total.toLocaleString()"></td>
+                        <td class="text-slate-400" x-text="item.acciones_equivalentes % 1 === 0 ? item.acciones_equivalentes.toFixed(0) : item.acciones_equivalentes.toFixed(2)"></td>
+                        <td class="text-slate-300" x-text="formatPrice(item.ppc_comparable)"></td>
+                        <td class="text-slate-400" x-text="formatPrice(item.costo_total_usd)"></td>
+                        <td class="text-slate-200 font-bold" x-text="formatPrice(item.precio_afuera)"></td>
+                        <td class="text-[#00f0ff]" x-text="formatPrice(item.valor_actual_usd)"></td>
+                        <td class="font-bold" :class="item.pnl_usd >= 0 ? 'text-[#00ff66]' : 'text-[#ff3b30]'" x-text="(item.pnl_usd >= 0 ? '+' : '') + formatPrice(item.pnl_usd)"></td>
+                        <td class="font-bold" :class="item.pnl_percent >= 0 ? 'text-[#00ff66]' : 'text-[#ff3b30]'" x-text="formatPercent(item.pnl_percent)"></td>
+                      </tr>
+                    </template>
+                    <template x-if="portfolioItems.length === 0">
+                      <tr>
+                        <td colspan="9" class="text-slate-500 text-center py-8 italic">
+                          No hay tenencias activas. Registra una operación de compra abajo para comenzar.
+                        </td>
+                      </tr>
+                    </template>
+                  </tbody>
+                </table>
+              </div>
             </div>
+
+            <!-- DISTRIBUCIÓN DE CARTERA (2/5 columnas) -->
+            <div class="lg:col-span-2 border border-slate-800 bg-[#0d121c] p-4 flex flex-col min-h-[220px]">
+              <h2 class="text-[#00ff66] glow-green font-mono text-sm font-bold mb-3 flex items-center gap-2">
+                <span class="text-slate-500">&gt;</span> DISTRIBUCIÓN DE CARTERA (VALOR ACTUAL USD)
+              </h2>
+              <div class="flex-grow relative w-full min-h-[220px] pb-2">
+                <div id="portfolioTreemap" class="w-full h-full"></div>
+              </div>
+            </div>
+
           </div>
 
           <!-- FILA INFERIOR: REGISTRO + HISTORIAL -->
@@ -560,7 +623,7 @@
                   </div>
                   <div>
                     <label class="text-slate-500 block mb-1">MONEDA PAGO</label>
-                    <select x-model="txForm.currency" class="term-input w-full bg-slate-950 text-slate-200">
+                    <select x-model="txForm.currency" @change="onCurrencyChange()" class="term-input w-full bg-slate-950 text-slate-200">
                       <option value="ARS">PESOS (ARS)</option>
                       <option value="USD">DÓLARES (USD)</option>
                     </select>
@@ -577,7 +640,12 @@
                     <input type="number" step="any" x-model="txForm.ratio" class="term-input w-full" required>
                   </div>
                   <div>
-                    <label class="text-slate-500 block mb-1" x-text="txForm.currency === 'ARS' ? 'DÓLAR CCL' : 'CANJE MEP-CCL'"></label>
+                    <div class="flex justify-between items-center mb-1">
+                      <label class="text-slate-500 block" x-text="txForm.currency === 'ARS' ? 'DÓLAR CCL' : 'CANJE MEP-CCL'"></label>
+                      <button type="button" @click="fetchExchangeRate()" class="text-xs text-amber-500 hover:text-amber-400 focus:outline-none font-bold" title="Autocompletar cotización">
+                        Auto ⚡
+                      </button>
+                    </div>
                     <input type="number" step="any" x-model="txForm.exchange_input" class="term-input w-full" required>
                   </div>
                 </div>
@@ -632,12 +700,45 @@
             </div>
 
             <!-- LOG DE TRANSACCIONES (3/5 columnas) -->
-            <div class="xl:col-span-3 border border-slate-800 bg-[#0d121c] p-4 flex flex-col justify-between max-h-[350px]">
+            <div class="xl:col-span-3 border border-slate-800 bg-[#0d121c] p-4 flex flex-col justify-between">
               <div>
-                <h2 class="text-[#00ff66] glow-green font-mono text-sm font-bold mb-3 flex items-center gap-2">
-                  <span class="text-slate-500">&gt;</span> REGISTRO DE TRANSACCIONES
-                </h2>
-                <div class="overflow-y-auto max-h-[220px]">
+                <div class="flex justify-between items-center mb-3">
+                  <h2 class="text-[#00ff66] glow-green font-mono text-sm font-bold flex items-center gap-2">
+                    <span class="text-slate-500">&gt;</span> REGISTRO DE TRANSACCIONES
+                  </h2>
+                  <div class="flex items-center gap-2">
+                    <!-- Invisible file input -->
+                    <input 
+                      type="file" 
+                      id="excel-import-input" 
+                      accept=".xlsx,.xls" 
+                      style="display: none;" 
+                      @change="importExcel($event)"
+                    >
+                    <button 
+                      type="button" 
+                      onclick="document.getElementById('excel-import-input').click()" 
+                      class="term-btn text-xs px-2 py-1 flex items-center gap-1 hover:bg-[#141c2b] font-mono"
+                      :disabled="isImporting"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"></path>
+                      </svg>
+                      <span x-text="isImporting ? 'IMPORTANDO...' : 'IMPORTAR'"></span>
+                    </button>
+                    <button 
+                      type="button" 
+                      @click="deleteAllTransactions()" 
+                      class="term-btn text-xs px-2 py-1 flex items-center gap-1 hover:bg-[#ff3b30]/10 border-red-500 text-red-500 font-mono"
+                    >
+                      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                      </svg>
+                      <span>ELIMINAR TODO</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="overflow-y-auto max-h-[300px]">
                   <table class="w-full term-table font-mono text-[10px] text-left">
                     <thead>
                       <tr class="border-b border-slate-800">
@@ -681,7 +782,48 @@
                 </div>
               </div>
             </div>
+          </div>
 
+          <!-- RESUMEN DE OPERACIONES CERRADAS -->
+          <div class="border border-slate-800 bg-[#0d121c] p-4 flex flex-col min-h-[220px] mt-4">
+            <h2 class="text-[#00ff66] glow-green font-mono text-sm font-bold mb-3 flex items-center gap-2">
+              <span class="text-slate-500">&gt;</span> RESUMEN DE OPERACIONES CERRADAS (HISTORIAL)
+            </h2>
+            <div class="overflow-x-auto flex-grow max-h-[300px]">
+              <table class="w-full term-table font-mono text-left text-xs">
+                <thead>
+                  <tr class="border-b border-slate-800 pb-2">
+                    <th class="py-2">TICKER (EXT)</th>
+                    <th>CANTIDAD (ACC. EQUIV.)</th>
+                    <th>COMPRA PROM. PPC (USD)</th>
+                    <th>VENTA COMP. (USD)</th>
+                    <th>P&L REALIZADO (USD)</th>
+                    <th>RENDIMIENTO REALIZADO</th>
+                    <th>FECHA CIERRE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template x-for="trade in closedTrades" :key="trade.date + trade.symbol + trade.quantity">
+                    <tr class="hover:bg-[#141c2b] border-b border-slate-900">
+                      <td class="font-bold text-[#00f0ff] py-2" x-text="trade.symbol"></td>
+                      <td class="text-slate-300" x-text="trade.quantity % 1 === 0 ? trade.quantity.toFixed(0) : trade.quantity.toFixed(4)"></td>
+                      <td class="text-slate-400" x-text="formatPrice(trade.ppc_comparable)"></td>
+                      <td class="text-slate-300 font-bold" x-text="formatPrice(trade.price_comparable)"></td>
+                      <td class="font-bold" :class="trade.pnl_usd >= 0 ? 'text-[#00ff66]' : 'text-[#ff3b30]'" x-text="(trade.pnl_usd >= 0 ? '+' : '') + formatPrice(trade.pnl_usd)"></td>
+                      <td class="font-bold" :class="trade.pnl_percent >= 0 ? 'text-[#00ff66]' : 'text-[#ff3b30]'" x-text="formatPercent(trade.pnl_percent)"></td>
+                      <td class="text-slate-500" x-text="new Date(trade.date).toLocaleDateString([], {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})"></td>
+                    </tr>
+                  </template>
+                  <template x-if="closedTrades.length === 0">
+                    <tr>
+                      <td colspan="7" class="text-slate-500 text-center py-8 italic">
+                        No hay operaciones cerradas registradas. Las operaciones se cierran al registrar ventas (SELL) de activos existentes.
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
           </div>
 
         </div>
