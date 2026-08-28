@@ -300,9 +300,12 @@
                       @click="addStock(res.symbol)"
                       class="p-2 border-b border-slate-900 hover:bg-[#141c2b] flex justify-between items-center cursor-pointer text-xs font-mono"
                     >
-                      <div>
+                      <div class="flex items-center gap-2">
+                        <div class="stock-logo-wrap logo-sm" :style="'background-color:' + getSymbolColor(res.symbol)">
+                          <img :src="getLogoUrl(res.symbol)" @error="handleLogoError($event, res.symbol)" alt="" loading="lazy">
+                        </div>
                         <span class="text-[#00f0ff] font-bold" x-text="res.symbol"></span>
-                        <span class="text-slate-400 ml-2" x-text="res.name"></span>
+                        <span class="text-slate-400 ml-1 truncate max-w-[150px]" x-text="res.name" :title="res.name"></span>
                       </div>
                       <div class="flex gap-2 items-center">
                         <span class="text-[10px] px-1 bg-slate-800 text-slate-500" x-text="res.exchange"></span>
@@ -392,6 +395,9 @@
                         <div class="flex items-center gap-2 w-full">
                           <!-- Drag handle for Stock -->
                           <span class="drag-handle cursor-grab active:cursor-grabbing text-slate-600 hover:text-[#00ff66] font-mono text-xs select-none">☰</span>
+                          <div class="stock-logo-wrap" :style="'background-color:' + getSymbolColor(item.symbol)">
+                            <img :src="getLogoUrl(item.symbol)" @error="handleLogoError($event, item.symbol)" alt="" loading="lazy">
+                          </div>
                           <span x-text="item.symbol"></span>
                         </div>
                       </td>
@@ -532,7 +538,14 @@
                   <tbody>
                     <template x-for="item in portfolioItems" :key="item.symbol">
                       <tr class="hover:bg-[#141c2b] border-b border-slate-900">
-                        <td class="font-bold text-[#00f0ff] py-2" x-text="item.symbol"></td>
+                        <td class="font-bold text-[#00f0ff] py-2">
+                          <div class="flex items-center gap-2">
+                            <div class="stock-logo-wrap logo-sm" :style="'background-color:' + getSymbolColor(item.symbol)">
+                              <img :src="getLogoUrl(item.symbol)" @error="handleLogoError($event, item.symbol)" alt="" loading="lazy">
+                            </div>
+                            <span x-text="item.symbol"></span>
+                          </div>
+                        </td>
                         <td class="text-slate-300" x-text="item.vn_total.toLocaleString()"></td>
                         <td class="text-slate-400" x-text="item.acciones_equivalentes % 1 === 0 ? item.acciones_equivalentes.toFixed(0) : item.acciones_equivalentes.toFixed(2)"></td>
                         <td class="text-slate-300" x-text="formatPrice(item.ppc_comparable)"></td>
@@ -601,9 +614,12 @@
                           @click="selectPortfolioStock(res.symbol)"
                           class="p-2 border-b border-slate-900 hover:bg-[#141c2b] flex justify-between items-center cursor-pointer text-[10px] font-mono text-left"
                         >
-                          <div>
+                          <div class="flex items-center gap-1.5">
+                            <div class="stock-logo-wrap logo-sm" :style="'background-color:' + getSymbolColor(res.symbol)">
+                              <img :src="getLogoUrl(res.symbol)" @error="handleLogoError($event, res.symbol)" alt="" loading="lazy">
+                            </div>
                             <span class="text-[#00f0ff] font-bold" x-text="res.symbol"></span>
-                            <span class="text-slate-400 ml-2 text-slate-500 truncate max-w-[120px]" x-text="res.name" :title="res.name"></span>
+                            <span class="text-slate-400 ml-1 text-slate-500 truncate max-w-[120px]" x-text="res.name" :title="res.name"></span>
                           </div>
                           <div class="flex gap-1.5 items-center">
                             <span class="text-[9px] px-1 bg-slate-800 text-slate-500" x-text="res.exchange"></span>
@@ -763,16 +779,25 @@
                       <template x-for="tx in transactions" :key="tx.id">
                         <tr class="hover:bg-[#141c2b] border-b border-slate-900">
                           <td class="text-slate-500 py-1" x-text="new Date(tx.date).toLocaleDateString([], {day:'2-digit', month:'2-digit', year:'2-digit'})"></td>
-                          <td class="font-bold text-[#00f0ff]" x-text="tx.symbol"></td>
+                          <td class="font-bold text-[#00f0ff] py-1">
+                            <div class="flex items-center gap-1.5">
+                              <div class="stock-logo-wrap logo-sm" :style="'background-color:' + getSymbolColor(tx.symbol)">
+                                <img :src="getLogoUrl(tx.symbol)" @error="handleLogoError($event, tx.symbol)" alt="" loading="lazy">
+                              </div>
+                              <span x-text="tx.symbol"></span>
+                            </div>
+                          </td>
                           <td class="font-bold" :class="tx.operation_type === 'BUY' ? 'text-[#00ff66]' : 'text-[#ff3b30]'" x-text="tx.operation_type"></td>
                           <td class="text-slate-300" x-text="tx.quantity"></td>
                           <td class="text-slate-300" x-text="formatPrice(tx.price) + ' ' + tx.currency"></td>
                           <td class="text-slate-400" x-text="tx.ratio"></td>
                           <td class="text-slate-400" x-text="tx.currency === 'ARS' ? (1/tx.exchange_rate).toFixed(0) : ((1 - tx.exchange_rate) * 100).toFixed(1) + '%'"></td>
                           <td class="text-slate-200" x-text="formatPrice(tx.price_comparable)"></td>
-                          <td class="text-center py-1 flex items-center justify-center gap-2">
-                            <button @click.stop="editTransaction(tx)" class="text-[#00f0ff] hover:text-[#5ce1e6] font-bold" title="Editar">[EDIT]</button>
-                            <button @click.stop="deleteTransaction(tx.id)" class="text-red-500 hover:text-red-300 font-bold" title="Eliminar">[X]</button>
+                          <td class="text-center py-1">
+                            <div class="flex items-center justify-center gap-2">
+                              <button @click.stop="editTransaction(tx)" class="text-[#00f0ff] hover:text-[#5ce1e6] font-bold" title="Editar">[EDIT]</button>
+                              <button @click.stop="deleteTransaction(tx.id)" class="text-red-500 hover:text-red-300 font-bold" title="Eliminar">[X]</button>
+                            </div>
                           </td>
                         </tr>
                       </template>
@@ -811,7 +836,14 @@
                 <tbody>
                   <template x-for="trade in closedTrades" :key="trade.date + trade.symbol + trade.quantity">
                     <tr class="hover:bg-[#141c2b] border-b border-slate-900">
-                      <td class="font-bold text-[#00f0ff] py-2" x-text="trade.symbol"></td>
+                      <td class="font-bold text-[#00f0ff] py-2">
+                        <div class="flex items-center gap-1.5">
+                          <div class="stock-logo-wrap logo-sm" :style="'background-color:' + getSymbolColor(trade.symbol)">
+                            <img :src="getLogoUrl(trade.symbol)" @error="handleLogoError($event, trade.symbol)" alt="" loading="lazy">
+                          </div>
+                          <span x-text="trade.symbol"></span>
+                        </div>
+                      </td>
                       <td class="text-slate-300" x-text="trade.quantity % 1 === 0 ? trade.quantity.toFixed(0) : trade.quantity.toFixed(4)"></td>
                       <td class="text-slate-400" x-text="formatPrice(trade.ppc_comparable)"></td>
                       <td class="text-slate-300 font-bold" x-text="formatPrice(trade.price_comparable)"></td>

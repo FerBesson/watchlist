@@ -1352,6 +1352,55 @@ document.addEventListener('alpine:init', () => {
         formatPrice(value) {
             if (value === null || value === undefined) return 'N/A';
             return `$${value.toFixed(2)}`;
+        },
+
+        // Helper: Get logo URL for stock/crypto symbol
+        getLogoUrl(symbol) {
+            if (!symbol) return '';
+            if (symbol.toUpperCase() === 'CASH') {
+                return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2300ff66" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>';
+            }
+            let clean = symbol.toUpperCase().split('.')[0].split('-')[0]; // e.g. BTC-USD -> BTC, AAPL.BA -> AAPL
+            return `https://assets.parqet.com/logos/symbol/${clean}`;
+        },
+
+        // Helper: Handle logo image load error by showing fallback initials
+        handleLogoError(event, symbol) {
+            const img = event.target;
+            const parent = img.parentElement;
+            if (img && parent) {
+                img.style.display = 'none';
+                let initials = '?';
+                if (symbol) {
+                    let upper = symbol.toUpperCase();
+                    if (upper === 'CASH') {
+                        initials = '$';
+                    } else {
+                        let clean = upper.replace(/[^A-Z0-9]/g, '');
+                        initials = clean.substring(0, 2);
+                    }
+                }
+                let fallbackSpan = parent.querySelector('.logo-initials');
+                if (!fallbackSpan) {
+                    fallbackSpan = document.createElement('span');
+                    fallbackSpan.className = 'logo-initials';
+                    parent.appendChild(fallbackSpan);
+                }
+                fallbackSpan.innerText = initials;
+                fallbackSpan.style.display = 'inline-block';
+            }
+        },
+
+        // Helper: Deterministic color for fallback badge background
+        getSymbolColor(symbol) {
+            if (!symbol) return '#1e293b';
+            if (symbol.toUpperCase() === 'CASH') return '#042f1a';
+            let hash = 0;
+            for (let i = 0; i < symbol.length; i++) {
+                hash = symbol.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const colors = ['#1e3a8a', '#065f46', '#7c2d12', '#4c1d95', '#831843', '#1e293b', '#312e81', '#064e3b'];
+            return colors[Math.abs(hash) % colors.length];
         }
     }));
 });
