@@ -15,7 +15,7 @@ from .auth import router as auth_router, get_current_user
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="Tracker de Acciones - Terminal Style",
+    title="NEBULA Stock Tracker",
     description="Backend en FastAPI para seguimiento de acciones con autenticación Google y multiusuario",
     version="2.0.0"
 )
