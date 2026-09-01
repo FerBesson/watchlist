@@ -2,12 +2,16 @@ import time
 import re
 import requests
 import datetime
+from concurrent.futures import ThreadPoolExecutor
 from bs4 import BeautifulSoup
 from typing import List, Dict, Any, Optional
 
-BASE_URL = "https://query1.finance.yahoo.com"
+BASE_URL = "https://query2.finance.yahoo.com"
+FALLBACK_BASE_URL = "https://query1.finance.yahoo.com"
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.5"
 }
 
 class YahooFinanceClient:
@@ -15,30 +19,48 @@ class YahooFinanceClient:
         self.session = None
         self.crumb = None
         self.last_session_time = 0
-        self.session_expiry = 3600  # Refresh session after 1 hour
+        self.session_expiry = 1800  # Refresh session after 30 min
+        self.failed_cooldown = 300  # Don't hammer crumb endpoint if failed, wait 5 min
+        
+        # In-memory quote cache to prevent spamming on rapid polling (TTL: 8 seconds)
+        self._cache = {}
+        self._cache_ttl = 8
 
     def _init_session(self):
         """Creates a requests session and retrieves the cookie + crumb from Yahoo Finance."""
         now = time.time()
-        if self.session and (now - self.last_session_time < self.session_expiry):
+        # If we have a valid session and not expired, skip
+        if self.session and self.crumb and (now - self.last_session_time < self.session_expiry):
             return
 
+        # If it failed recently, don't spam getcrumb on every single request
+        if not self.crumb and (now - self.last_session_time < self.failed_cooldown):
+            return
+
+        self.last_session_time = now
         try:
             s = requests.Session()
             s.headers.update(HEADERS)
-            # Fetch cookie
-            s.get("https://fc.yahoo.com", timeout=10)
-            # Fetch crumb
-            crumb_resp = s.get(f"{BASE_URL}/v1/test/getcrumb", timeout=10)
+            # Step 1: Fetch cookie
+            s.get("https://fc.yahoo.com", timeout=8)
+            # Step 2: Fetch crumb from query2
+            crumb_resp = s.get(f"{BASE_URL}/v1/test/getcrumb", timeout=8)
+            if crumb_resp.status_code != 200:
+                # Try fallback query1
+                crumb_resp = s.get(f"{FALLBACK_BASE_URL}/v1/test/getcrumb", timeout=8)
+
             crumb_resp.raise_for_status()
-            self.crumb = crumb_resp.text.strip()
-            
-            s.params = {"crumb": self.crumb}
-            self.session = s
-            self.last_session_time = now
-            print(f"[YahooFinance] Session initialized successfully with crumb: {self.crumb}")
+            crumb_text = crumb_resp.text.strip()
+            if crumb_text and not "<html" in crumb_text.lower():
+                self.crumb = crumb_text
+                s.params = {"crumb": self.crumb}
+                self.session = s
+                print(f"[YahooFinance] Session initialized successfully with crumb.")
+            else:
+                self.crumb = None
+                self.session = s
         except Exception as e:
-            print(f"[YahooFinance] Failed to initialize session with crumb: {e}. Falling back to crumb-less mode.")
+            # Silent fallback without breaking app
             self.session = requests.Session()
             self.session.headers.update(HEADERS)
             self.crumb = None
@@ -48,12 +70,13 @@ class YahooFinanceClient:
         url = f"{BASE_URL}/v1/finance/search"
         params = {"q": query, "quotesCount": 10, "newsCount": 0}
         try:
-            resp = requests.get(url, params=params, headers=HEADERS, timeout=10)
+            resp = requests.get(url, params=params, headers=HEADERS, timeout=8)
+            if resp.status_code != 200:
+                resp = requests.get(f"{FALLBACK_BASE_URL}/v1/finance/search", params=params, headers=HEADERS, timeout=8)
             resp.raise_for_status()
             data = resp.json()
             results = []
             for quote in data.get("quotes", []):
-                # Filter to only return equities, crypto, etc.
                 if quote.get("quoteType") in ["EQUITY", "CRYPTO", "ETF", "INDEX"]:
                     results.append({
                         "symbol": quote.get("symbol"),
@@ -72,7 +95,6 @@ class YahooFinanceClient:
         """Fetch metadata like long name, sector, and industry for a specific ticker."""
         self._init_session()
         
-        # Default fallback metadata
         metadata = {
             "symbol": symbol.upper(),
             "name": symbol.upper(),
@@ -80,7 +102,7 @@ class YahooFinanceClient:
             "industry": "N/A"
         }
 
-        # Try search first (often contains sector and name without crumb issues)
+        # Try search first
         search_res = self.search_symbols(symbol)
         for res in search_res:
             if res["symbol"].upper() == symbol.upper():
@@ -91,106 +113,123 @@ class YahooFinanceClient:
                     metadata["industry"] = res["industry"]
                 return metadata
 
-        # If search does not match exactly, try quoteSummary (requires session crumb)
-        if not self.crumb:
+        if not self.crumb or not self.session:
             return metadata
 
         url = f"{BASE_URL}/v10/finance/quoteSummary/{symbol}"
-        params = {"modules": "assetProfile,quoteType"}
+        params = {"modules": "assetProfile,quoteType", "crumb": self.crumb}
         try:
-            resp = self.session.get(url, params=params, timeout=10)
+            resp = self.session.get(url, params=params, timeout=8)
             if resp.status_code == 200:
                 data = resp.json()
                 result = data.get("quoteSummary", {}).get("result", [{}])[0]
-                
                 profile = result.get("assetProfile", {})
                 qtype = result.get("quoteType", {})
-                
                 metadata["name"] = qtype.get("longName") or qtype.get("shortName") or symbol.upper()
                 metadata["sector"] = profile.get("sector", "International")
                 metadata["industry"] = profile.get("industry", "N/A")
         except Exception as e:
-            print(f"[YahooFinance] Error fetching metadata for {symbol}: {e}")
+            pass
         
         return metadata
 
+    def _fetch_single_chart_quote(self, sym_upper: str) -> tuple:
+        """Fetch single quote via the robust /v8/finance/chart endpoint."""
+        try:
+            url = f"{BASE_URL}/v8/finance/chart/{sym_upper}"
+            resp = requests.get(url, params={"range": "1d", "interval": "1d"}, headers=HEADERS, timeout=6)
+            if resp.status_code == 200:
+                data = resp.json()
+                meta = data.get("chart", {}).get("result", [{}])[0].get("meta", {})
+                price = meta.get("regularMarketPrice")
+                prev_close = meta.get("chartPreviousClose")
+                
+                change = None
+                change_percent = None
+                if price is not None and prev_close is not None:
+                    change = price - prev_close
+                    change_percent = (change / prev_close) * 100 if prev_close != 0 else 0
+                    
+                return sym_upper, {
+                    "price": price,
+                    "prev_close": prev_close,
+                    "change": change,
+                    "change_percent": change_percent,
+                    "volume": meta.get("regularMarketVolume"),
+                    "market_cap": None,
+                    "pe": None,
+                    "dividend_yield": None
+                }
+        except Exception:
+            pass
+        return sym_upper, None
+
     def get_quotes(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:
-        """Fetch real-time quotes (price, change, previous close) for multiple symbols."""
+        """Fetch real-time quotes for multiple symbols with caching and parallel fallback."""
         if not symbols:
             return {}
-            
-        self._init_session()
-        symbols_str = ",".join([s.upper() for s in symbols])
+
+        now = time.time()
+        symbols_upper = [s.strip().upper() for s in symbols if s.strip()]
         quotes_dict = {}
+        missing_symbols = []
 
-        # 1. Try batch quotes using /v7/finance/quote (requires crumb if initialized)
-        if self.crumb:
-            url = f"{BASE_URL}/v7/finance/quote"
-            try:
-                resp = self.session.get(url, params={"symbols": symbols_str}, timeout=10)
-                resp.raise_for_status()
-                data = resp.json()
-                results = data.get("quoteResponse", {}).get("result", [])
-                for q in results:
-                    symbol = q.get("symbol").upper()
-                    quotes_dict[symbol] = {
-                        "price": q.get("regularMarketPrice"),
-                        "prev_close": q.get("regularMarketPreviousClose"),
-                        "change": q.get("regularMarketChange"),
-                        "change_percent": q.get("regularMarketChangePercent"),
-                        "volume": q.get("regularMarketVolume"),
-                        "market_cap": q.get("marketCap"),
-                        "pe": q.get("trailingPE"),
-                        "dividend_yield": q.get("dividendYield")
-                    }
-                return quotes_dict
-            except Exception as e:
-                print(f"[YahooFinance] Batch quote query failed ({e}). Falling back to individual charts.")
+        # Check in-memory cache
+        for sym in symbols_upper:
+            if sym in self._cache and (now - self._cache[sym]["_cached_at"] < self._cache_ttl):
+                quotes_dict[sym] = self._cache[sym]
+            else:
+                missing_symbols.append(sym)
 
-        # 2. Fallback: Fetch quotes individually using the robust /v8/finance/chart endpoint (no crumb needed)
-        print("[YahooFinance] Fetching quotes via chart fallback...")
-        for sym in symbols:
-            sym_upper = sym.upper()
+        if not missing_symbols:
+            return quotes_dict
+
+        self._init_session()
+
+        # 1. Try batch quotes using /v7/finance/quote if crumb is available
+        if self.crumb and self.session:
             try:
-                url = f"{BASE_URL}/v8/finance/chart/{sym_upper}"
-                # We only need 1 day of data
-                resp = requests.get(url, params={"range": "1d", "interval": "1d"}, headers=HEADERS, timeout=10)
+                symbols_str = ",".join(missing_symbols)
+                url = f"{BASE_URL}/v7/finance/quote"
+                resp = self.session.get(url, params={"symbols": symbols_str, "crumb": self.crumb}, timeout=8)
                 if resp.status_code == 200:
                     data = resp.json()
-                    meta = data.get("chart", {}).get("result", [{}])[0].get("meta", {})
+                    results = data.get("quoteResponse", {}).get("result", [])
+                    for q in results:
+                        sym = q.get("symbol", "").upper()
+                        quote_obj = {
+                            "price": q.get("regularMarketPrice"),
+                            "prev_close": q.get("regularMarketPreviousClose"),
+                            "change": q.get("regularMarketChange"),
+                            "change_percent": q.get("regularMarketChangePercent"),
+                            "volume": q.get("regularMarketVolume"),
+                            "market_cap": q.get("marketCap"),
+                            "pe": q.get("trailingPE"),
+                            "dividend_yield": q.get("dividendYield"),
+                            "_cached_at": now
+                        }
+                        quotes_dict[sym] = quote_obj
+                        self._cache[sym] = quote_obj
                     
-                    price = meta.get("regularMarketPrice")
-                    prev_close = meta.get("chartPreviousClose")
-                    
-                    # Compute change manually if missing
-                    change = None
-                    change_percent = None
-                    if price is not None and prev_close is not None:
-                        change = price - prev_close
-                        change_percent = (change / prev_close) * 100 if prev_close != 0 else 0
-                        
-                    quotes_dict[sym_upper] = {
-                        "price": price,
-                        "prev_close": prev_close,
-                        "change": change,
-                        "change_percent": change_percent,
-                        "volume": meta.get("regularMarketVolume"),
-                        "market_cap": None,  # Not available in chart meta
-                        "pe": None,
-                        "dividend_yield": None
-                    }
-            except Exception as e:
-                print(f"[YahooFinance] Fallback quote failed for {sym_upper}: {e}")
-                
+                    # Update missing list
+                    missing_symbols = [s for s in missing_symbols if s not in quotes_dict]
+            except Exception:
+                pass
+
+        # 2. Parallel fallback using ThreadPoolExecutor on /v8/finance/chart
+        if missing_symbols:
+            with ThreadPoolExecutor(max_workers=min(12, len(missing_symbols))) as executor:
+                results = executor.map(self._fetch_single_chart_quote, missing_symbols)
+                for sym, q in results:
+                    if q:
+                        q["_cached_at"] = now
+                        quotes_dict[sym] = q
+                        self._cache[sym] = q
+
         return quotes_dict
 
     def get_historical_data(self, symbol: str, time_range: str = "1mo", interval: str = "1d") -> List[Dict[str, Any]]:
         """Fetch historical chart data for drawing charts."""
-        # Mapping standard ranges to valid yahoo ranges/intervals
-        # Ranges: 1d, 5d, 1mo, 3mo, 6mo, 1y, 5y, max
-        # Intervals: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
-        
-        # Safety overrides
         if time_range == "1d":
             interval = "5m"
         elif time_range == "5d":
@@ -200,7 +239,9 @@ class YahooFinanceClient:
         params = {"range": time_range, "interval": interval}
         
         try:
-            resp = requests.get(url, params=params, headers=HEADERS, timeout=10)
+            resp = requests.get(url, params=params, headers=HEADERS, timeout=8)
+            if resp.status_code != 200:
+                resp = requests.get(f"{FALLBACK_BASE_URL}/v8/finance/chart/{symbol.upper()}", params=params, headers=HEADERS, timeout=8)
             resp.raise_for_status()
             data = resp.json()
             
@@ -213,7 +254,7 @@ class YahooFinanceClient:
             for i, ts in enumerate(timestamps):
                 if i < len(close_prices) and close_prices[i] is not None:
                     chart_data.append({
-                        "time": ts, # Unix timestamp
+                        "time": ts,
                         "value": close_prices[i]
                     })
             return chart_data
@@ -223,6 +264,7 @@ class YahooFinanceClient:
 
 # Singleton instance
 finance_client = YahooFinanceClient()
+
 
 
 from .cedear_ratios_data import BYMA_CEDEAR_RATIOS
