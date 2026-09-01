@@ -448,32 +448,30 @@ def get_portfolio(db: Session, user_id: Optional[int] = None):
     closed_trades.sort(key=lambda x: x["date"], reverse=True)
     
     # --- XIRR (TIR) Calculation ---
-    # Build cash flow series: BUY = negative outflow, SELL = positive inflow
-    # Final flow = current portfolio value + cash balance at today's date
+    # Build cash flow series based exclusively on equity (stock/CEDEAR) operations:
+    # BUY = negative outflow, SELL = positive inflow
+    # Terminal flow = current portfolio market value of active equities at today's date
     from datetime import datetime as _dt, timezone as _tz
     
     cash_flows = []  # list of (datetime, amount)
     for tx in txs:
         symbol = tx.symbol.upper()
+        if symbol == "CASH":
+            continue
+            
         cant_acciones = tx.quantity / tx.ratio
         monto_usd = cant_acciones * tx.price_comparable
         
-        if symbol == "CASH":
-            # CASH BUY = capital injection (negative outflow for XIRR)
-            if tx.operation_type == "BUY":
-                cash_flows.append((tx.date, -monto_usd))
-            elif tx.operation_type == "SELL":
-                cash_flows.append((tx.date, monto_usd))
-        elif tx.operation_type == "BUY":
+        if tx.operation_type == "BUY":
             cash_flows.append((tx.date, -monto_usd))
         elif tx.operation_type == "SELL":
             cash_flows.append((tx.date, monto_usd))
     
-    # Add terminal value: current portfolio valuation + remaining cash
+    # Add terminal value: current active equities portfolio valuation
     terminal_value = sum(
         item.get("valor_actual_usd", 0.0) or 0.0 for item in result
         if item["symbol"] != "CASH"
-    ) + max(cash_balance, 0.0)
+    )
     
     now = _dt.now(_tz.utc)
     if terminal_value > 0:
@@ -499,23 +497,30 @@ def get_portfolio(db: Session, user_id: Optional[int] = None):
         def npv_deriv(r):
             return sum(-y * v / ((1.0 + r) ** (y + 1)) for v, y in zip(values, years))
         
-        r = 0.1  # initial guess 10%
-        try:
-            for _ in range(200):
-                val = npv(r)
-                deriv = npv_deriv(r)
-                if abs(deriv) < 1e-12:
-                    break
-                next_r = r - val / deriv
-                if abs(next_r - r) < 1e-8:
-                    r = next_r
-                    break
-                r = next_r
-            # Sanity check: XIRR should be within reasonable bounds (-99% to +10000%)
-            if -0.99 < r < 100.0:
-                tir = round(r * 100, 2)
-        except (ZeroDivisionError, OverflowError, ValueError):
-            tir = None
+        # Newton-Raphson solver with multi-guess fallback
+        has_negative = any(v < 0 for v in values)
+        has_positive = any(v > 0 for v in values)
+        
+        if has_negative and has_positive:
+            for initial_guess in [0.1, 0.0, -0.1, 0.5, -0.5]:
+                r = initial_guess
+                try:
+                    for _ in range(200):
+                        val = npv(r)
+                        deriv = npv_deriv(r)
+                        if abs(deriv) < 1e-12:
+                            break
+                        next_r = r - val / deriv
+                        if abs(next_r - r) < 1e-8:
+                            r = next_r
+                            break
+                        r = next_r
+                    # Sanity check: XIRR should be within reasonable bounds (-99% to +10000%)
+                    if -0.99 < r < 100.0 and abs(npv(r)) < 1e-2:
+                        tir = round(r * 100, 2)
+                        break
+                except (ZeroDivisionError, OverflowError, ValueError):
+                    continue
         
     return {
         "items": result, 
