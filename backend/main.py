@@ -32,7 +32,15 @@ app.add_middleware(
 # Mount Auth Router
 app.include_router(auth_router)
 
+# --- HEALTHCHECK & KEEP-ALIVE PING ---
+@app.api_route("/api/ping", methods=["GET", "HEAD"])
+@app.api_route("/health", methods=["GET", "HEAD"])
+def ping():
+    """Endpoint ultra ligero para monitoreo y keep-alive (UptimeRobot)."""
+    return {"status": "ok", "message": "pong"}
+
 # --- WATCHLIST ENDPOINTS ---
+
 
 @app.get("/api/watchlists", response_model=List[schemas.Watchlist])
 def read_watchlists(
