@@ -17,7 +17,7 @@
   <!-- Google Identity Services -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <!-- Custom JS Application -->
-  <script defer src="/static/js/app.js?v=4.0"></script>
+  <script defer src="/static/js/app.js?v=4.4"></script>
   <!-- Alpine.js CDN -->
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
@@ -26,22 +26,71 @@
   <!-- Subtle CRT scanline overlay -->
   <div class="crt-overlay"></div>
 
-  <!-- LOGIN OVERLAY WHEN NOT LOGGED IN -->
-  <div x-show="!isLoggedIn && !authChecking" x-cloak class="fixed inset-0 z-50 bg-[#070b12]/95 backdrop-blur-md flex items-center justify-center p-4 font-mono">
-    <div class="border border-[#00ff66] bg-[#0d121c] p-6 md:p-8 max-w-md w-full shadow-2xl shadow-[#00ff66]/10 text-center relative">
-      <div class="inline-flex items-center justify-center w-12 h-12 rounded bg-[#141c2b] border border-[#00ff66] mb-4 text-[#00ff66] text-xl font-bold glow-green">
+  <!-- LOGIN OVERLAY / MODAL -->
+  <div x-show="(!isLoggedIn && !isGuest && !authChecking) || showLoginModal" x-cloak class="fixed inset-0 z-50 bg-[#070b12]/95 backdrop-blur-md flex items-center justify-center p-4 font-mono">
+    <div class="border border-[#00ff66]/70 bg-[#0d121c] p-6 md:p-8 max-w-lg w-full shadow-2xl shadow-[#00ff66]/10 text-center relative rounded-lg">
+      
+      <!-- Close button if already in guest mode -->
+      <button 
+        x-show="isGuest" 
+        @click="closeLoginModal()" 
+        class="absolute top-3 right-3 text-slate-500 hover:text-red-400 font-bold text-lg p-1 transition"
+        title="Cerrar ventana"
+      >✕</button>
+
+      <div class="inline-flex items-center justify-center w-12 h-12 rounded bg-[#141c2b] border border-[#00ff66] mb-3 text-[#00ff66] text-xl font-bold glow-green">
         &gt;_
       </div>
       <h2 class="text-base md:text-lg font-bold text-[#00ff66] glow-green uppercase mb-2">STOCK TRACKER TERMINAL</h2>
-      <p class="text-xs text-slate-400 mb-6 leading-relaxed">
-        Inicia sesión con tu cuenta de Google para acceder a tus watchlists personalizadas y sincronizar tus transacciones en la nube.
-      </p>
+      
+      <!-- Value Proposition / Benefits of Logging In -->
+      <div class="bg-[#141c2b]/90 border border-slate-700/70 rounded p-3.5 mb-5 text-left text-xs">
+        <p class="text-slate-200 font-semibold mb-2 text-center text-[13px] text-[#00f0ff]">
+          ⭐ Inicia sesión con tu cuenta de Google para guardar tus listas de seguimiento y cartera de inversión:
+        </p>
+        <ul class="space-y-1.5 text-slate-300 text-[11px] leading-relaxed">
+          <li class="flex items-start gap-2">
+            <span class="text-[#00ff66] font-bold">✓</span>
+            <span><strong class="text-white">Sincronización en la nube:</strong> Accede a tus datos y listas desde cualquier dispositivo.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="text-[#00ff66] font-bold">✓</span>
+            <span><strong class="text-white">Cartera &amp; Rendimiento:</strong> Guarda tu historial de transacciones, cálculo de PPC, TIR y métricas.</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="text-[#00ff66] font-bold">✓</span>
+            <span><strong class="text-white">Personalización permanente:</strong> Guarda múltiples listas, divisores y columnas elegidas.</span>
+          </li>
+        </ul>
+      </div>
 
+      <!-- Google Sign In Button Container -->
       <div class="flex flex-col items-center justify-center min-h-[45px] mb-4">
         <div id="google-signin-btn-container"></div>
       </div>
 
-      <div x-show="!hasGoogleClientId" class="p-3 border border-amber-500/40 bg-amber-950/40 text-amber-300 text-[11px] rounded text-left mt-2 leading-normal">
+      <!-- Divider -->
+      <div class="flex items-center my-4">
+        <div class="flex-grow border-t border-slate-800"></div>
+        <span class="px-3 text-[11px] text-slate-500 uppercase tracking-widest font-bold">o bien</span>
+        <div class="flex-grow border-t border-slate-800"></div>
+      </div>
+
+      <!-- Guest Entry Option -->
+      <div class="flex flex-col items-center">
+        <button 
+          @click="enterAsGuest()" 
+          class="w-full py-2.5 px-4 rounded border border-slate-700 bg-[#141c2b] hover:bg-[#1a2436] hover:border-[#00ff66]/70 text-slate-200 hover:text-[#00ff66] font-mono text-xs font-bold transition flex items-center justify-center gap-2 group shadow-sm"
+        >
+          <span class="text-[#00ff66] group-hover:translate-x-0.5 transition-transform">&gt;</span>
+          <span>INGRESAR COMO INVITADO</span>
+        </button>
+        <p class="text-[11px] text-slate-500 mt-2 font-mono leading-tight">
+          Explora la terminal sin registrarte. <span class="text-slate-400">Los cambios que realices no se guardarán al salir.</span>
+        </p>
+      </div>
+
+      <div x-show="!hasGoogleClientId" class="p-3 border border-amber-500/40 bg-amber-950/40 text-amber-300 text-[11px] rounded text-left mt-4 leading-normal">
         <span class="font-bold text-amber-200">ℹ️ CONFIGURACIÓN PENDIENTE:</span><br>
         Agrega tu <code class="text-white bg-black/40 px-1 py-0.5 rounded">GOOGLE_CLIENT_ID</code> en el archivo <code class="text-white bg-black/40 px-1 py-0.5 rounded">.env</code> para conectar el botón oficial de Google.
       </div>
@@ -56,7 +105,7 @@
       <template x-if="isLoggedIn && currentUser">
         <span class="text-xs text-[#00f0ff] font-mono" x-text="currentUser.email"></span>
       </template>
-      <template x-if="!isLoggedIn">
+      <template x-if="!isLoggedIn && isGuest">
         <span class="text-xs text-slate-500 font-mono">MODO_INVITADO</span>
       </template>
     </div>
@@ -71,6 +120,17 @@
         <span class="text-[#00f0ff] glow-cyan" x-text="lastUpdated || 'N/A'"></span>
       </div>
 
+      <!-- Guest Login Button CTA -->
+      <template x-if="!isLoggedIn && isGuest">
+        <button 
+          @click="openLoginModal()" 
+          class="flex items-center gap-1.5 border border-[#00ff66]/50 bg-[#141c2b] hover:bg-[#00ff66]/10 text-[#00ff66] px-2.5 py-1 rounded font-bold transition glow-green"
+          title="Guardar tus listas y sincronizar en la nube"
+        >
+          <span>🔑 INICIAR SESIÓN CON GOOGLE</span>
+        </button>
+      </template>
+
       <!-- User Profile Badge & Logout -->
       <template x-if="isLoggedIn && currentUser">
         <div class="flex items-center gap-2 border border-slate-700 bg-[#141c2b] px-2.5 py-1 rounded">
@@ -78,7 +138,7 @@
             <img :src="currentUser.picture" alt="" class="w-4 h-4 rounded-full border border-[#00ff66]">
           </template>
           <span class="text-slate-200 font-bold text-xs" x-text="currentUser.name || currentUser.email"></span>
-          <button @click="logout()" title="Cerrar sesión" class="text-rose-400 hover:text-rose-300 ml-1 border-l border-slate-700 pl-2 hover:underline">
+          <button @click="logout()" title="Cerrar sesión" class="text-rose-400 hover:text-rose-300 ml-1 border-l border-slate-700 pl-2 hover:underline font-bold">
             [SALIR]
           </button>
         </div>

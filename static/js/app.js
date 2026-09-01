@@ -2,6 +2,8 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('stockApp', () => ({
         // Auth State
         isLoggedIn: false,
+        isGuest: false,
+        showLoginModal: false,
         authChecking: true,
         currentUser: null,
         authToken: localStorage.getItem('auth_token') || null,
@@ -118,13 +120,13 @@ document.addEventListener('alpine:init', () => {
 
             // Watch for changes in date or currency to update exchange rate and ratio
             this.$watch('txForm.date', () => {
-                if (this.isLoggedIn) {
+                if (this.isLoggedIn || this.isGuest) {
                     this.fetchExchangeRate();
                     this.fetchCedearRatio();
                 }
             });
             this.$watch('txForm.currency', () => {
-                if (this.isLoggedIn) {
+                if (this.isLoggedIn || this.isGuest) {
                     this.fetchExchangeRate();
                 }
             });
@@ -166,6 +168,7 @@ document.addEventListener('alpine:init', () => {
                     if (meRes.ok) {
                         this.currentUser = await meRes.json();
                         this.isLoggedIn = true;
+                        this.isGuest = false;
                     } else {
                         this.authToken = null;
                         localStorage.removeItem('auth_token');
@@ -214,6 +217,44 @@ document.addEventListener('alpine:init', () => {
             checkGis();
         },
 
+        enterAsGuest() {
+            this.isGuest = true;
+            this.showLoginModal = false;
+            
+            // Set default guest sample watchlist if empty
+            if (!this.watchlists || this.watchlists.length === 0) {
+                const defaultWl = {
+                    id: 1,
+                    name: 'Favoritas',
+                    description: 'Lista de seguimiento de prueba (Modo Invitado)',
+                    metrics: 'sector,price,prev_close,change_percent',
+                    items: [
+                        { id: 1, symbol: 'CARTERA', name: null, sector: null, is_divider: true, order: 0, notes: null },
+                        { id: 2, symbol: 'AAPL', name: 'Apple Inc.', sector: 'Consumer Electronics', is_divider: false, order: 1, notes: null },
+                        { id: 3, symbol: 'MSFT', name: 'Microsoft Corporation', sector: 'Software - Infrastructure', is_divider: false, order: 2, notes: null },
+                        { id: 4, symbol: 'TSLA', name: 'Tesla, Inc.', sector: 'Auto Manufacturers', is_divider: false, order: 3, notes: null },
+                        { id: 5, symbol: 'CRIPTO', name: null, sector: null, is_divider: true, order: 4, notes: null },
+                        { id: 6, symbol: 'BTC-USD', name: 'Bitcoin USD', sector: 'Cryptocurrency', is_divider: false, order: 5, notes: null }
+                    ]
+                };
+                this.watchlists = [defaultWl];
+            }
+            
+            if (this.watchlists.length > 0) {
+                this.selectWatchlist(this.watchlists[0].id);
+            }
+            this.fetchExchangeRate();
+        },
+
+        openLoginModal() {
+            this.showLoginModal = true;
+            this.$nextTick(() => this.initGoogleSignIn());
+        },
+
+        closeLoginModal() {
+            this.showLoginModal = false;
+        },
+
         async handleGoogleCredential(response) {
             try {
                 this.isLoading = true;
@@ -234,9 +275,14 @@ document.addEventListener('alpine:init', () => {
                 localStorage.setItem('auth_token', data.access_token);
                 this.currentUser = data.user;
                 this.isLoggedIn = true;
+                this.isGuest = false;
+                this.showLoginModal = false;
 
-                // Cargar datos del usuario
+                // Cargar datos del usuario desde la base de datos
                 await this.fetchWatchlists();
+                if (this.watchlists.length > 0) {
+                    this.selectWatchlist(this.watchlists[0].id);
+                }
                 await this.fetchExchangeRate();
 
                 // Precarga en segundo plano de cartera
@@ -258,23 +304,57 @@ document.addEventListener('alpine:init', () => {
         },
 
         logout() {
-            this.stopAutoRefresh();
-            this.stopPortfolioAutoRefresh();
-            localStorage.removeItem('auth_token');
+            try {
+                this.stopAutoRefresh();
+            } catch (e) {
+                console.warn('Error stopping auto refresh:', e);
+            }
+            try {
+                this.stopPortfolioRefresh();
+            } catch (e) {
+                console.warn('Error stopping portfolio refresh:', e);
+            }
+
+            try {
+                localStorage.removeItem('auth_token');
+                sessionStorage.clear();
+            } catch (e) {}
+
             this.authToken = null;
             this.currentUser = null;
             this.isLoggedIn = false;
+            this.isGuest = false;
+            this.showLoginModal = false;
+            this.currentWatchlistId = null;
+            this.currentWatchlist = null;
+            this.selectedStock = null;
             this.watchlists = [];
             this.watchlistItems = [];
             this.portfolioItems = [];
             this.transactions = [];
             this.closedTrades = [];
+
+            if (window.google && window.google.accounts && window.google.accounts.id) {
+                try {
+                    window.google.accounts.id.disableAutoSelect();
+                } catch (e) {
+                    console.warn('[Google Auth] disableAutoSelect error:', e);
+                }
+            }
+
             this.$nextTick(() => this.initGoogleSignIn());
+        },
+
+        stopPortfolioAutoRefresh() {
+            this.stopPortfolioRefresh();
         },
 
 
         // Fetch all watchlists
         async fetchWatchlists() {
+            if (this.isGuest) {
+                return;
+            }
             try {
                 const response = await this.authFetch('/api/watchlists');
                 if (response.ok) {
@@ -341,43 +421,102 @@ document.addEventListener('alpine:init', () => {
             if (!this.currentWatchlistId) return;
             this.isQuotesLoading = true;
             try {
-                const response = await this.authFetch(`/api/watchlists/${this.currentWatchlistId}/quotes`);
-                if (response.ok) {
-                    const newItems = await response.json();
+                let newItems = [];
+                if (this.isGuest) {
+                    if (!this.currentWatchlist) return;
+                    const items = (this.currentWatchlist.items || []).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id - b.id);
+                    const stockSymbols = items.filter(it => !it.is_divider).map(it => it.symbol);
                     
-                    // Compare with old prices to set flash animations
-                    newItems.forEach(newItem => {
-                        const oldItem = this.watchlistItems.find(item => item.symbol === newItem.symbol);
-                        if (oldItem && oldItem.price !== undefined && newItem.price !== undefined) {
-                            if (newItem.price > oldItem.price) {
-                                newItem.flash = 'up';
-                            } else if (newItem.price < oldItem.price) {
-                                newItem.flash = 'down';
-                            } else if (oldItem.flash) {
-                                // Persist existing flash if price hasn't changed again before timeout
-                                newItem.flash = oldItem.flash;
+                    let quotesMap = {};
+                    if (stockSymbols.length > 0) {
+                        try {
+                            const qRes = await fetch(`/api/quotes?symbols=${encodeURIComponent(stockSymbols.join(','))}`);
+                            if (qRes.ok) {
+                                quotesMap = await qRes.json();
                             }
+                        } catch (qErr) {
+                            console.error('Error fetching guest quotes:', qErr);
+                        }
+                    }
+                    
+                    newItems = items.map(it => {
+                        if (it.is_divider) {
+                            return {
+                                id: it.id,
+                                symbol: it.symbol,
+                                name: null,
+                                sector: null,
+                                notes: it.notes,
+                                is_divider: true,
+                                order: it.order,
+                                price: null,
+                                prev_close: null,
+                                change: null,
+                                change_percent: null,
+                                volume: null,
+                                market_cap: null,
+                                pe: null,
+                                dividend_yield: null
+                            };
+                        }
+                        const q = quotesMap[it.symbol] || {};
+                        return {
+                            id: it.id,
+                            symbol: it.symbol,
+                            name: it.name || q.name || it.symbol,
+                            sector: it.sector || q.sector || "International",
+                            notes: it.notes,
+                            is_divider: false,
+                            order: it.order,
+                            price: q.price !== undefined ? q.price : null,
+                            prev_close: q.prev_close !== undefined ? q.prev_close : null,
+                            change: q.change !== undefined ? q.change : null,
+                            change_percent: q.change_percent !== undefined ? q.change_percent : null,
+                            volume: q.volume !== undefined ? q.volume : null,
+                            market_cap: q.market_cap !== undefined ? q.market_cap : null,
+                            pe: q.pe !== undefined ? q.pe : null,
+                            dividend_yield: q.dividend_yield !== undefined ? q.dividend_yield : null
+                        };
+                    });
+                } else {
+                    const response = await this.authFetch(`/api/watchlists/${this.currentWatchlistId}/quotes`);
+                    if (response.ok) {
+                        newItems = await response.json();
+                    }
+                }
+                
+                // Compare with old prices to set flash animations
+                newItems.forEach(newItem => {
+                    const oldItem = this.watchlistItems.find(item => item.symbol === newItem.symbol);
+                    if (oldItem && oldItem.price !== undefined && newItem.price !== undefined) {
+                        if (newItem.price > oldItem.price) {
+                            newItem.flash = 'up';
+                        } else if (newItem.price < oldItem.price) {
+                            newItem.flash = 'down';
+                        } else if (oldItem.flash) {
+                            // Persist existing flash if price hasn't changed again before timeout
+                            newItem.flash = oldItem.flash;
+                        }
+                    }
+                });
+                
+                this.watchlistItems = newItems;
+                this.lastUpdated = new Date().toLocaleTimeString();
+                
+                // Clear flashes after 1.5 seconds
+                setTimeout(() => {
+                    this.watchlistItems.forEach(item => {
+                        if (item.flash) {
+                            item.flash = null;
                         }
                     });
-                    
-                    this.watchlistItems = newItems;
-                    this.lastUpdated = new Date().toLocaleTimeString();
-                    
-                    // Clear flashes after 1.5 seconds
-                    setTimeout(() => {
-                        this.watchlistItems.forEach(item => {
-                            if (item.flash) {
-                                item.flash = null;
-                            }
-                        });
-                    }, 1500);
-                    
-                    // If we have a selected stock, update its details
-                    if (this.selectedStock) {
-                        const updated = this.watchlistItems.find(item => item.symbol === this.selectedStock.symbol);
-                        if (updated) {
-                            this.selectedStock = updated;
-                        }
+                }, 1500);
+                
+                // If we have a selected stock, update its details
+                if (this.selectedStock) {
+                    const updated = this.watchlistItems.find(item => item.symbol === this.selectedStock.symbol);
+                    if (updated) {
+                        this.selectedStock = updated;
                     }
                 }
             } catch (error) {
@@ -427,6 +566,120 @@ document.addEventListener('alpine:init', () => {
 
         // Fetch consolidated portfolio data
         async fetchPortfolio() {
+            if (this.isGuest) {
+                const symbols = Array.from(new Set(this.transactions.filter(t => t.symbol && t.symbol !== 'CASH').map(t => t.symbol)));
+                let quotesMap = {};
+                if (symbols.length > 0) {
+                    try {
+                        const qRes = await fetch(`/api/quotes?symbols=${encodeURIComponent(symbols.join(','))}`);
+                        if (qRes.ok) quotesMap = await qRes.json();
+                    } catch (e) {
+                        console.error('Error fetching quotes for guest portfolio:', e);
+                    }
+                }
+                
+                const holdingsMap = {};
+                let realizedPnL = 0;
+                let winningTrades = 0;
+                let losingTrades = 0;
+                let totalWinAmount = 0;
+                let totalLossAmount = 0;
+                let largestWin = 0;
+                let largestLoss = 0;
+                
+                const sortedTxs = [...this.transactions].sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+                
+                sortedTxs.forEach(tx => {
+                    const sym = (tx.symbol || '').toUpperCase();
+                    if (!sym || sym === 'CASH') return;
+                    
+                    if (!holdingsMap[sym]) {
+                        holdingsMap[sym] = {
+                            symbol: sym,
+                            vn_total: 0,
+                            acciones_equivalentes: 0,
+                            costo_total_usd: 0,
+                            ppc_comparable: 0,
+                            precio_afuera: null,
+                            valor_actual_usd: 0,
+                            pnl_usd: 0,
+                            pnl_percent: 0,
+                            prev_close: null
+                        };
+                    }
+                    
+                    const item = holdingsMap[sym];
+                    const cantAcciones = tx.quantity / (tx.ratio || 1.0);
+                    const costUsd = cantAcciones * (tx.price_comparable || (tx.price * tx.ratio * tx.exchange_rate));
+                    
+                    if (tx.operation_type === 'BUY') {
+                        item.vn_total += tx.quantity;
+                        item.acciones_equivalentes += cantAcciones;
+                        item.costo_total_usd += costUsd;
+                        item.ppc_comparable = item.acciones_equivalentes > 0 ? (item.costo_total_usd / item.acciones_equivalentes) : 0;
+                    } else if (tx.operation_type === 'SELL') {
+                        if (item.acciones_equivalentes > 0) {
+                            const avgCost = item.costo_total_usd / item.acciones_equivalentes;
+                            const sellQty = Math.min(cantAcciones, item.acciones_equivalentes);
+                            const saleGain = (tx.price_comparable - avgCost) * sellQty;
+                            realizedPnL += saleGain;
+                            
+                            if (saleGain > 0) {
+                                winningTrades++;
+                                totalWinAmount += saleGain;
+                                if (saleGain > largestWin) largestWin = saleGain;
+                            } else if (saleGain < 0) {
+                                losingTrades++;
+                                totalLossAmount += Math.abs(saleGain);
+                                if (Math.abs(saleGain) > largestLoss) largestLoss = Math.abs(saleGain);
+                            }
+                            
+                            item.acciones_equivalentes = Math.max(0, item.acciones_equivalentes - sellQty);
+                            item.vn_total = Math.max(0, item.vn_total - tx.quantity);
+                            item.costo_total_usd = item.acciones_equivalentes * avgCost;
+                        }
+                    }
+                });
+                
+                const activeItems = Object.values(holdingsMap).filter(h => h.acciones_equivalentes > 0.0001);
+                activeItems.forEach(h => {
+                    const q = quotesMap[h.symbol] || {};
+                    h.precio_afuera = q.price !== undefined ? q.price : null;
+                    h.prev_close = q.prev_close !== undefined ? q.prev_close : null;
+                    if (h.precio_afuera !== null) {
+                        h.valor_actual_usd = h.acciones_equivalentes * h.precio_afuera;
+                        h.pnl_usd = h.valor_actual_usd - h.costo_total_usd;
+                        h.pnl_percent = h.costo_total_usd > 0 ? (h.pnl_usd / h.costo_total_usd * 100) : 0;
+                    } else {
+                        h.valor_actual_usd = h.costo_total_usd;
+                        h.pnl_usd = 0;
+                        h.pnl_percent = 0;
+                    }
+                });
+                
+                this.portfolioItems = activeItems;
+                this.portfolioRealizedPnL = realizedPnL;
+                
+                const totalTrades = winningTrades + losingTrades;
+                this.portfolioMetrics = {
+                    total_trades: totalTrades,
+                    winning_trades: winningTrades,
+                    losing_trades: losingTrades,
+                    win_rate: totalTrades > 0 ? (winningTrades / totalTrades) * 100 : 0.0,
+                    profit_factor: totalLossAmount > 0 ? (totalWinAmount / totalLossAmount) : (totalWinAmount > 0 ? 99.0 : 1.0),
+                    avg_win: winningTrades > 0 ? (totalWinAmount / winningTrades) : 0.0,
+                    avg_loss: losingTrades > 0 ? (totalLossAmount / losingTrades) : 0.0,
+                    win_loss_ratio: (losingTrades > 0 && winningTrades > 0) ? ((totalWinAmount / winningTrades) / (totalLossAmount / losingTrades)) : 0.0,
+                    largest_win: largestWin,
+                    largest_loss: largestLoss
+                };
+                
+                this.$nextTick(() => {
+                    this.renderPortfolioTreemap();
+                });
+                return;
+            }
+            
             try {
                 const response = await this.authFetch('/api/portfolio');
                 if (response.ok) {
@@ -448,6 +701,9 @@ document.addEventListener('alpine:init', () => {
 
         // Fetch transactions log
         async fetchTransactions() {
+            if (this.isGuest) {
+                return;
+            }
             try {
                 const response = await this.authFetch('/api/transactions');
                 if (response.ok) {
@@ -474,8 +730,6 @@ document.addEventListener('alpine:init', () => {
             if (this.txForm.currency === 'ARS') {
                 exRate = 1.0 / exInput;
             } else if (this.txForm.currency === 'USD') {
-                // If user entered e.g. 4 for 4%, convert to 0.04.
-                // If they entered 0.04 directly, keep as 0.04.
                 let canje = exInput;
                 if (canje >= 1.0) {
                     canje = canje / 100.0;
@@ -496,6 +750,40 @@ document.addEventListener('alpine:init', () => {
             };
 
             const isEditing = this.editingTransactionId !== null;
+
+            if (this.isGuest) {
+                const txData = {
+                    id: isEditing ? this.editingTransactionId : Date.now(),
+                    symbol: payload.symbol,
+                    operation_type: payload.operation_type,
+                    quantity: payload.quantity,
+                    price: payload.price,
+                    currency: payload.currency,
+                    ratio: payload.ratio,
+                    exchange_rate: payload.exchange_rate,
+                    price_comparable: payload.price * payload.ratio * payload.exchange_rate,
+                    date: payload.date || new Date().toISOString(),
+                    notes: payload.notes
+                };
+                
+                if (isEditing) {
+                    const idx = this.transactions.findIndex(t => t.id === this.editingTransactionId);
+                    if (idx !== -1) this.transactions[idx] = txData;
+                } else {
+                    this.transactions.unshift(txData);
+                }
+                
+                this.editingTransactionId = null;
+                this.txForm.symbol = '';
+                this.txForm.quantity = '';
+                this.txForm.price = '';
+                this.txForm.date = '';
+                this.txForm.notes = '';
+                
+                await this.fetchPortfolio();
+                return;
+            }
+
             const url = isEditing ? `/api/transactions/${this.editingTransactionId}` : '/api/transactions';
             const method = isEditing ? 'PUT' : 'POST';
 
@@ -567,8 +855,6 @@ document.addEventListener('alpine:init', () => {
             
             this.txForm.notes = tx.notes || '';
             
-            console.log("Form values loaded:", JSON.parse(JSON.stringify(this.txForm)));
-            
             // Scroll to form smoothly
             const formElem = document.querySelector('form');
             if (formElem) {
@@ -591,6 +877,11 @@ document.addEventListener('alpine:init', () => {
         // Delete a transaction from log
         async deleteTransaction(id) {
             if (!confirm('¿Está seguro de eliminar esta transacción? Esta acción recalculará el PPC.')) {
+                return;
+            }
+            if (this.isGuest) {
+                this.transactions = this.transactions.filter(t => t.id !== id);
+                await this.fetchPortfolio();
                 return;
             }
             try {
@@ -651,6 +942,11 @@ document.addEventListener('alpine:init', () => {
             if (!confirm('¿Está absolutamente seguro de eliminar TODAS las transacciones registradas? Esta acción es irreversible y vaciará tu cartera.')) {
                 return;
             }
+            if (this.isGuest) {
+                this.transactions = [];
+                await this.fetchPortfolio();
+                return;
+            }
             try {
                 const response = await this.authFetch('/api/transactions', {
                     method: 'DELETE'
@@ -705,6 +1001,21 @@ document.addEventListener('alpine:init', () => {
             if (!name) return; // Cancel if empty
             
             const metricsStr = this.selectedMetrics.join(',');
+            
+            if (this.isGuest) {
+                const newId = Date.now();
+                const newWl = {
+                    id: newId,
+                    name: name,
+                    description: '',
+                    metrics: metricsStr,
+                    items: []
+                };
+                this.watchlists.push(newWl);
+                this.selectWatchlist(newId);
+                return;
+            }
+            
             try {
                 const response = await this.authFetch('/api/watchlists', {
                     method: 'POST',
@@ -749,6 +1060,17 @@ document.addEventListener('alpine:init', () => {
             
             if (!name) return; // Cancel if empty
             
+            if (this.isGuest) {
+                const wl = this.watchlists.find(w => w.id === id);
+                if (wl) {
+                    wl.name = name;
+                    if (this.currentWatchlistId === id && this.currentWatchlist) {
+                        this.currentWatchlist.name = name;
+                    }
+                }
+                return;
+            }
+            
             try {
                 const response = await this.authFetch(`/api/watchlists/${id}`, {
                     method: 'PUT',
@@ -761,7 +1083,7 @@ document.addEventListener('alpine:init', () => {
                 if (response.ok) {
                     await this.fetchWatchlists();
                     // Update currentWatchlist title if this is the active one
-                    if (this.currentWatchlistId === id) {
+                    if (this.currentWatchlistId === id && this.currentWatchlist) {
                         this.currentWatchlist.name = name;
                     }
                 } else {
@@ -776,6 +1098,19 @@ document.addEventListener('alpine:init', () => {
         // Delete current watchlist
         async deleteWatchlist(id) {
             if (!confirm('¿Estás seguro de eliminar esta lista de seguimiento?')) return;
+            
+            if (this.isGuest) {
+                this.watchlists = this.watchlists.filter(w => w.id !== id);
+                this.currentWatchlistId = null;
+                this.currentWatchlist = null;
+                this.watchlistItems = [];
+                this.selectedStock = null;
+                this.stopAutoRefresh();
+                if (this.watchlists.length > 0) {
+                    this.selectWatchlist(this.watchlists[0].id);
+                }
+                return;
+            }
             
             try {
                 const response = await this.authFetch(`/api/watchlists/${id}`, {
@@ -810,9 +1145,17 @@ document.addEventListener('alpine:init', () => {
                 this.selectedMetrics.push(metricId);
             }
             
+            const metricsStr = this.selectedMetrics.join(',');
+            if (this.currentWatchlist) {
+                this.currentWatchlist.metrics = metricsStr;
+            }
+            
+            if (this.isGuest) {
+                return;
+            }
+            
             // Save metrics to current watchlist in DB
             if (this.currentWatchlistId) {
-                const metricsStr = this.selectedMetrics.join(',');
                 try {
                     await this.authFetch(`/api/watchlists/${this.currentWatchlistId}`, {
                         method: 'PUT',
@@ -821,10 +1164,6 @@ document.addEventListener('alpine:init', () => {
                             metrics: metricsStr
                         })
                     });
-                    // Refresh watchlist metadata cache
-                    if (this.currentWatchlist) {
-                        this.currentWatchlist.metrics = metricsStr;
-                    }
                     this.fetchWatchlists();
                 } catch (error) {
                     console.error('Error updating watchlist metrics:', error);
@@ -967,7 +1306,55 @@ document.addEventListener('alpine:init', () => {
 
         // Add a stock from search results to current watchlist
         async addStock(symbol) {
-            if (!this.currentWatchlistId) return;
+            if (!this.currentWatchlistId || !this.currentWatchlist) return;
+            const sym = symbol.trim().toUpperCase();
+            
+            if (this.isGuest) {
+                if (!this.currentWatchlist.items) this.currentWatchlist.items = [];
+                const existing = this.currentWatchlist.items.find(i => !i.is_divider && i.symbol.toUpperCase() === sym);
+                if (existing) {
+                    alert(`El símbolo ${sym} ya está en esta lista.`);
+                    return;
+                }
+                
+                this.isLoading = true;
+                try {
+                    let stockName = sym;
+                    let stockSector = 'International';
+                    const qRes = await fetch(`/api/quotes?symbols=${encodeURIComponent(sym)}`);
+                    if (qRes.ok) {
+                        const qData = await qRes.json();
+                        if (qData[sym]) {
+                            stockName = qData[sym].name || sym;
+                            stockSector = qData[sym].sector || 'International';
+                        }
+                    }
+                    
+                    const maxOrder = this.currentWatchlist.items.length > 0 
+                        ? Math.max(...this.currentWatchlist.items.map(i => i.order ?? 0)) + 1 
+                        : 0;
+                    
+                    const newItem = {
+                        id: Date.now(),
+                        symbol: sym,
+                        name: stockName,
+                        sector: stockSector,
+                        is_divider: false,
+                        order: maxOrder,
+                        notes: null
+                    };
+                    this.currentWatchlist.items.push(newItem);
+                    this.searchQuery = '';
+                    this.searchResults = [];
+                    await this.fetchWatchlistQuotes();
+                } catch (e) {
+                    console.error('Error adding stock in guest mode:', e);
+                } finally {
+                    this.isLoading = false;
+                }
+                return;
+            }
+            
             this.isLoading = true;
             try {
                 const response = await this.authFetch(`/api/watchlists/${this.currentWatchlistId}/items`, {
@@ -993,8 +1380,19 @@ document.addEventListener('alpine:init', () => {
 
         // Remove stock from current watchlist
         async removeStock(symbol) {
-            if (!this.currentWatchlistId) return;
+            if (!this.currentWatchlistId || !this.currentWatchlist) return;
             if (!confirm(`¿Remover ${symbol} de esta lista?`)) return;
+            
+            if (this.isGuest) {
+                if (this.currentWatchlist.items) {
+                    this.currentWatchlist.items = this.currentWatchlist.items.filter(i => i.symbol !== symbol);
+                }
+                if (this.selectedStock && this.selectedStock.symbol === symbol) {
+                    this.selectedStock = null;
+                }
+                await this.fetchWatchlistQuotes();
+                return;
+            }
             
             this.isLoading = true;
             try {
@@ -1017,9 +1415,28 @@ document.addEventListener('alpine:init', () => {
 
         // Add a section divider (TradingView-style)
         async addSection() {
-            if (!this.currentWatchlistId || !this.newSectionName.trim()) return;
+            if (!this.currentWatchlistId || !this.currentWatchlist || !this.newSectionName.trim()) return;
             const name = this.newSectionName.trim();
             this.newSectionName = '';
+            
+            if (this.isGuest) {
+                if (!this.currentWatchlist.items) this.currentWatchlist.items = [];
+                const maxOrder = this.currentWatchlist.items.length > 0 
+                    ? Math.max(...this.currentWatchlist.items.map(i => i.order ?? 0)) + 1 
+                    : 0;
+                const newDivider = {
+                    id: Date.now(),
+                    symbol: name,
+                    name: null,
+                    sector: null,
+                    is_divider: true,
+                    order: maxOrder,
+                    notes: null
+                };
+                this.currentWatchlist.items.push(newDivider);
+                await this.fetchWatchlistQuotes();
+                return;
+            }
             
             this.isLoading = true;
             try {
@@ -1048,6 +1465,26 @@ document.addEventListener('alpine:init', () => {
         // Move an item (stock or divider) up or down in sorting order
         async moveItem(itemId, direction) {
             if (!this.currentWatchlistId) return;
+            if (this.isGuest) {
+                if (this.currentWatchlist && this.currentWatchlist.items) {
+                    const items = this.currentWatchlist.items;
+                    const idx = items.findIndex(it => it.id === itemId);
+                    if (idx !== -1) {
+                        if (direction === 'up' && idx > 0) {
+                            const temp = items[idx];
+                            items[idx] = items[idx - 1];
+                            items[idx - 1] = temp;
+                        } else if (direction === 'down' && idx < items.length - 1) {
+                            const temp = items[idx];
+                            items[idx] = items[idx + 1];
+                            items[idx + 1] = temp;
+                        }
+                        items.forEach((it, i) => it.order = i);
+                        await this.fetchWatchlistQuotes();
+                    }
+                }
+                return;
+            }
             try {
                 const response = await this.authFetch(`/api/watchlists/${this.currentWatchlistId}/items/${itemId}/move?direction=${direction}`, {
                     method: 'POST'
@@ -1089,6 +1526,19 @@ document.addEventListener('alpine:init', () => {
                         const rows = el.querySelectorAll('tr[data-id]');
                         const itemIds = Array.from(rows).map(row => parseInt(row.getAttribute('data-id')));
                         
+                        if (this.isGuest) {
+                            if (this.currentWatchlist && this.currentWatchlist.items) {
+                                const itemMap = new Map(this.currentWatchlist.items.map(it => [it.id, it]));
+                                this.currentWatchlist.items = itemIds.map((id, idx) => {
+                                    const it = itemMap.get(id);
+                                    if (it) it.order = idx;
+                                    return it;
+                                }).filter(Boolean);
+                            }
+                            await this.fetchWatchlistQuotes();
+                            return;
+                        }
+
                         try {
                             const response = await this.authFetch(`/api/watchlists/${this.currentWatchlistId}/reorder`, {
                                 method: 'POST',
@@ -1128,6 +1578,17 @@ document.addEventListener('alpine:init', () => {
             this.editingDividerId = null; // Reset first to prevent double trigger (enter + blur)
             
             if (!name) return; // Cancel if empty
+            
+            if (this.isGuest) {
+                if (this.currentWatchlist && this.currentWatchlist.items) {
+                    const div = this.currentWatchlist.items.find(i => i.id === id);
+                    if (div) {
+                        div.symbol = name;
+                    }
+                }
+                await this.fetchWatchlistQuotes();
+                return;
+            }
             
             try {
                 const response = await this.authFetch(`/api/watchlists/${this.currentWatchlistId}/items/${id}`, {
@@ -1173,6 +1634,16 @@ document.addEventListener('alpine:init', () => {
                         const rows = el.querySelectorAll('[data-wl-id]');
                         const wlIds = Array.from(rows).map(row => parseInt(row.getAttribute('data-wl-id')));
                         
+                        if (this.isGuest) {
+                            const wlMap = new Map(this.watchlists.map(w => [w.id, w]));
+                            this.watchlists = wlIds.map((id, idx) => {
+                                const w = wlMap.get(id);
+                                if (w) w.order = idx;
+                                return w;
+                            }).filter(Boolean);
+                            return;
+                        }
+
                         try {
                             const response = await this.authFetch('/api/watchlists/reorder', {
                                 method: 'POST',
