@@ -288,14 +288,36 @@ document.addEventListener('alpine:init', () => {
                     this.selectedMetrics = ['sector', 'price', 'prev_close', 'change_percent'];
                 }
                 
-                this.isLoading = true;
+                // CARGA INSTANTÁNEA (OPTIMISTIC UI): Mostrar los activos de la memoria inmediatamente
+                if (this.currentWatchlist.items && this.currentWatchlist.items.length > 0) {
+                    // Mantener cotizaciones previas si ya existían en memoria
+                    const existingMap = new Map(this.watchlistItems.map(it => [it.symbol, it]));
+                    this.watchlistItems = this.currentWatchlist.items.map(it => {
+                        const prev = existingMap.get(it.symbol);
+                        return {
+                            ...it,
+                            price: prev ? prev.price : null,
+                            prev_close: prev ? prev.prev_close : null,
+                            change: prev ? prev.change : null,
+                            change_percent: prev ? prev.change_percent : null,
+                            volume: prev ? prev.volume : null,
+                            market_cap: prev ? prev.market_cap : null,
+                            pe: prev ? prev.pe : null,
+                            dividend_yield: prev ? prev.dividend_yield : null
+                        };
+                    });
+                }
+                
+                // Cargar cotizaciones actualizadas en background
+                this.isQuotesLoading = true;
                 await this.fetchWatchlistQuotes();
-                this.isLoading = false;
+                this.isQuotesLoading = false;
                 
                 // Start refresh loop
                 this.startAutoRefresh();
             }
         },
+
 
         // Fetch quotes for current watchlist
         async fetchWatchlistQuotes() {
