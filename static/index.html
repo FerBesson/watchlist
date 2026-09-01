@@ -4,10 +4,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NEBULA Stock Tracker</title>
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/static/img/nebula_terminal_icon_transparent_4K-removebg-preview.png">
+  <link rel="apple-touch-icon" href="/static/img/nebula_terminal_icon_transparent_4K-removebg-preview.png">
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Custom CSS for terminal aesthetic -->
-  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/style.css?v=2.0">
   <!-- SortableJS CDN for Drag and Drop -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
   <!-- Chart.js CDN -->
@@ -38,10 +41,11 @@
         title="Cerrar ventana"
       >✕</button>
 
-      <div class="inline-flex items-center justify-center w-12 h-12 rounded bg-[#141c2b] border border-[#00ff66] mb-3 text-[#00ff66] text-xl font-bold glow-green">
-        &gt;_
+      <div class="relative flex items-center justify-center mb-4">
+        <div class="absolute w-28 h-28 rounded-full bg-gradient-to-r from-pink-500/25 via-fuchsia-500/30 to-purple-600/20 blur-xl pointer-events-none"></div>
+        <img src="/static/img/nebula_terminal_icon_transparent_4K-removebg-preview.png" alt="Nebula Terminal Icon" class="w-24 h-24 object-contain relative z-10 nebula-icon-glow-lg transition-transform duration-300 hover:scale-105">
       </div>
-      <h2 class="text-base md:text-lg font-bold text-[#00ff66] glow-green uppercase mb-2">NEBULA STOCK TRACKER</h2>
+      <h2 class="text-base md:text-lg font-bold text-[#00ff66] glow-green uppercase mb-2 tracking-wider">NEBULA STOCK TRACKER</h2>
       
       <!-- Value Proposition / Benefits of Logging In -->
       <div class="bg-[#141c2b]/90 border border-slate-700/70 rounded p-3.5 mb-5 text-left text-xs">
@@ -99,8 +103,12 @@
 
   <!-- MAIN HEADER -->
   <header class="border border-slate-800 bg-[#0d121c] p-4 mb-4 flex flex-col md:flex-row justify-between items-center gap-4">
-    <div class="flex items-center gap-3">
-      <span class="text-[#00ff66] font-bold text-xl glow-green">&gt; NEBULA STOCK TRACKER</span>
+    <div class="flex items-center gap-3.5">
+      <div class="relative flex items-center justify-center flex-shrink-0">
+        <div class="absolute w-12 h-12 rounded-full bg-gradient-to-r from-pink-500/25 via-fuchsia-500/30 to-purple-600/20 blur-md pointer-events-none"></div>
+        <img src="/static/img/nebula_terminal_icon_transparent_4K-removebg-preview.png" alt="Nebula Terminal" class="w-10 h-10 md:w-11 md:h-11 object-contain relative z-10 nebula-icon-glow transition-transform duration-200 hover:scale-105">
+      </div>
+      <span class="text-[#00ff66] font-bold text-xl glow-green tracking-wide">NEBULA STOCK TRACKER</span>
       <span class="hidden md:inline text-slate-600">|</span>
       <template x-if="isLoggedIn && currentUser">
         <span class="text-xs text-[#00f0ff] font-mono" x-text="currentUser.email"></span>

@@ -17,6 +17,10 @@
   --neon-red: #ff3b30;
   --neon-red-glow: rgba(255, 59, 48, 0.15);
   --neon-amber: #f59e0b;
+  --neon-pink: #ec4899;
+  --neon-magenta: #ff007f;
+  --neon-pink-glow: rgba(236, 72, 153, 0.45);
+  --neon-magenta-glow: rgba(255, 0, 127, 0.35);
 }
 
 body {
@@ -75,6 +79,17 @@ body {
 }
 .glow-cyan {
   text-shadow: 0 0 5px var(--neon-cyan-glow), 0 0 10px var(--neon-cyan-glow);
+}
+.glow-pink {
+  text-shadow: 0 0 5px var(--neon-pink-glow), 0 0 10px var(--neon-pink-glow);
+}
+
+.nebula-icon-glow {
+  filter: drop-shadow(0 0 8px rgba(236, 72, 153, 0.6)) drop-shadow(0 0 18px rgba(192, 38, 211, 0.35));
+}
+
+.nebula-icon-glow-lg {
+  filter: drop-shadow(0 0 14px rgba(236, 72, 153, 0.7)) drop-shadow(0 0 28px rgba(192, 38, 211, 0.45));
 }
 
 .border-neon-green {
