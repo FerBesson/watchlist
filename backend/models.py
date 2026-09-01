@@ -29,7 +29,8 @@ class Watchlist(Base):
     order = Column(Integer, default=0, nullable=False)    # Sorting sequence index for watchlists in sidebar
 
     user = relationship("User", back_populates="watchlists")
-    items = relationship("WatchlistItem", back_populates="watchlist", cascade="all, delete-orphan")
+    items = relationship("WatchlistItem", back_populates="watchlist", order_by="WatchlistItem.order", cascade="all, delete-orphan")
+
 
     __table_args__ = (
         UniqueConstraint("user_id", "name", name="uq_user_watchlist_name"),

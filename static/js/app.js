@@ -288,11 +288,13 @@ document.addEventListener('alpine:init', () => {
                     this.selectedMetrics = ['sector', 'price', 'prev_close', 'change_percent'];
                 }
                 
-                // CARGA INSTANTÁNEA (OPTIMISTIC UI): Mostrar los activos de la memoria inmediatamente
+                // CARGA INSTANTÁNEA (OPTIMISTIC UI): Mostrar los activos de la memoria inmediatamente ordenados
                 if (this.currentWatchlist.items && this.currentWatchlist.items.length > 0) {
                     // Mantener cotizaciones previas si ya existían en memoria
                     const existingMap = new Map(this.watchlistItems.map(it => [it.symbol, it]));
-                    this.watchlistItems = this.currentWatchlist.items.map(it => {
+                    const sortedItems = [...this.currentWatchlist.items].sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id - b.id);
+                    
+                    this.watchlistItems = sortedItems.map(it => {
                         const prev = existingMap.get(it.symbol);
                         return {
                             ...it,
@@ -307,6 +309,7 @@ document.addEventListener('alpine:init', () => {
                         };
                     });
                 }
+
                 
                 // Cargar cotizaciones actualizadas en background
                 this.isQuotesLoading = true;
