@@ -460,7 +460,7 @@ def import_transactions(
             col_map['operation'] = col
         elif 'concert' in col_clean or 'fecha' in col_clean:
             col_map['date'] = col
-        elif 'descrip' in col_clean or 'ticker' in col_clean:
+        elif 'descrip' in col_clean or 'ticker' in col_clean or 'especie' in col_clean or 'activo' in col_clean:
             col_map['symbol'] = col
         elif 'moneda' in col_clean:
             col_map['currency'] = col
@@ -478,11 +478,18 @@ def import_transactions(
                    f"Columnas detectadas: {list(df.columns)}"
         )
         
-    imported_count = 0
-    skipped_count = 0
-    
     from .finance import get_cedear_info_by_symbol_and_date
     from .exchange import get_rates_for_date
+    
+    # Sort chronologically (oldest first) if date column is present
+    try:
+        df['_parsed_date'] = pd.to_datetime(df[col_map['date']], errors='coerce')
+        df = df.sort_values(by='_parsed_date', ascending=True).reset_index(drop=True)
+    except Exception as sort_err:
+        print(f"[Import] Warning sorting dates: {sort_err}")
+
+    imported_count = 0
+    skipped_count = 0
     
     for idx, row in df.iterrows():
         try:
@@ -502,34 +509,36 @@ def import_transactions(
             date_dt = pd.to_datetime(raw_date)
             date_val = date_dt.to_pydatetime()
             
-            # Symbol
-            raw_symbol = str(row[col_map['symbol']]).strip().upper()
-            sym_clean = raw_symbol[:-3] if raw_symbol.endswith(".BA") else raw_symbol
+            # Quantity (handle negative numbers in sales)
+            raw_qty = row[col_map['quantity']]
+            if pd.isnull(raw_qty):
+                continue
+            quantity = abs(float(raw_qty))
+            if quantity <= 0:
+                continue
+                
+            # Price
+            raw_price = row[col_map['price']]
+            if pd.isnull(raw_price):
+                continue
+            price = abs(float(raw_price))
+            if price <= 0:
+                continue
             
-            info = get_cedear_info_by_symbol_and_date(sym_clean, date_val)
+            # Symbol & CEDEAR Resolution (handles "NUD | NU Holdings Ltd", "GOGLD", "SUPVD", etc.)
+            raw_symbol_str = str(row[col_map['symbol']]).strip()
+            info = get_cedear_info_by_symbol_and_date(raw_symbol_str, date_val)
             ratio = info["ratio"]
             symbol = info["symbol_origin"]
                 
             # Currency
             raw_currency = str(row[col_map['currency']]).strip().upper()
-            if 'ARS' in raw_currency or 'PESO' in raw_currency:
-                currency = 'ARS'
-            elif 'USD' in raw_currency or 'DOLAR' in raw_currency or 'DÓLAR' in raw_currency or 'MEP' in raw_currency:
+            if 'USD' in raw_currency or 'DOLAR' in raw_currency or 'DÓLAR' in raw_currency or 'MEP' in raw_currency or 'CCL' in raw_currency:
                 currency = 'USD'
             else:
-                currency = 'ARS'  # fallback
+                currency = 'ARS'
                 
-            # Quantity
-            quantity = float(row[col_map['quantity']])
-            if pd.isnull(quantity) or quantity <= 0:
-                continue
-                
-            # Price
-            price = float(row[col_map['price']])
-            if pd.isnull(price) or price <= 0:
-                continue
-                
-            # Check duplicates (comparing date part) for current user
+            # Check duplicates (comparing date, symbol, op, qty, price, currency) for current user
             candidates = db.query(models.Transaction).filter(
                 models.Transaction.user_id == current_user.id,
                 models.Transaction.symbol == symbol,
@@ -570,7 +579,7 @@ def import_transactions(
                 exchange_rate=exchange_rate,
                 price_comparable=price_comparable,
                 date=date_val,
-                notes="Importado desde Excel"
+                notes="Importado desde Inviu Excel"
             )
             db.add(db_tx)
             imported_count += 1
@@ -581,7 +590,7 @@ def import_transactions(
     if imported_count > 0:
         db.commit()
         
-    return {"imported": imported_count, "skipped": skipped_count}
+    return {"imported": imported_count, "skipped": skipped_count, "total": len(df)}
 
 
 

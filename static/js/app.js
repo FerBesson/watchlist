@@ -52,6 +52,8 @@ document.addEventListener('alpine:init', () => {
         portfolioSearchTimeout: null,
         editingTransactionId: null,
         isImporting: false,
+        showImportModal: false,
+        showTxHelpModal: false,
         // Inline Creation State
         isCreatingWatchlist: false,
         newWatchlistInputName: '',
@@ -610,6 +612,9 @@ document.addEventListener('alpine:init', () => {
         async importExcel(event) {
             const file = event.target.files[0];
             if (!file) return;
+
+            // Close modal
+            this.showImportModal = false;
 
             // Reset input value so it triggers change event if same file is selected again
             event.target.value = '';

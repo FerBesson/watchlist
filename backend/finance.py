@@ -357,21 +357,111 @@ def load_cedear_ratios():
         print(f"[Cedears] Error loading ratios from Comafi ({e}). Using fixed database.")
         cedear_ratios = BYMA_CEDEAR_RATIOS
 
+# ADR and CEDEAR ticker aliases (including BYMA local tickers and MEP/CCL variants)
+ADR_CEDEAR_ALIASES = {
+    # Argentine ADRs
+    "SUPV": {"symbol": "SUPV", "symbol_origin": "SUPV", "ratio": 5.0},
+    "SUPVD": {"symbol": "SUPV", "symbol_origin": "SUPV", "ratio": 5.0},
+    "SUPVC": {"symbol": "SUPV", "symbol_origin": "SUPV", "ratio": 5.0},
+    "YPF": {"symbol": "YPF", "symbol_origin": "YPF", "ratio": 1.0},
+    "YPFD": {"symbol": "YPF", "symbol_origin": "YPF", "ratio": 1.0},
+    "YPFDD": {"symbol": "YPF", "symbol_origin": "YPF", "ratio": 1.0},
+    "YPFDC": {"symbol": "YPF", "symbol_origin": "YPF", "ratio": 1.0},
+    "GGAL": {"symbol": "GGAL", "symbol_origin": "GGAL", "ratio": 10.0},
+    "GGALD": {"symbol": "GGAL", "symbol_origin": "GGAL", "ratio": 10.0},
+    "GGALC": {"symbol": "GGAL", "symbol_origin": "GGAL", "ratio": 10.0},
+    "BMA": {"symbol": "BMA", "symbol_origin": "BMA", "ratio": 10.0},
+    "BMAD": {"symbol": "BMA", "symbol_origin": "BMA", "ratio": 10.0},
+    "BMAC": {"symbol": "BMA", "symbol_origin": "BMA", "ratio": 10.0},
+    "BBAR": {"symbol": "BBAR", "symbol_origin": "BBAR", "ratio": 3.0},
+    "BBARD": {"symbol": "BBAR", "symbol_origin": "BBAR", "ratio": 3.0},
+    "BBARC": {"symbol": "BBAR", "symbol_origin": "BBAR", "ratio": 3.0},
+    "PAM": {"symbol": "PAM", "symbol_origin": "PAM", "ratio": 25.0},
+    "PAMP": {"symbol": "PAM", "symbol_origin": "PAM", "ratio": 25.0},
+    "PAMPD": {"symbol": "PAM", "symbol_origin": "PAM", "ratio": 25.0},
+    "PAMPC": {"symbol": "PAM", "symbol_origin": "PAM", "ratio": 25.0},
+    "CEPU": {"symbol": "CEPU", "symbol_origin": "CEPU", "ratio": 10.0},
+    "CEPUD": {"symbol": "CEPU", "symbol_origin": "CEPU", "ratio": 10.0},
+    "CEPUC": {"symbol": "CEPU", "symbol_origin": "CEPU", "ratio": 10.0},
+    "CRES": {"symbol": "CRESY", "symbol_origin": "CRESY", "ratio": 10.0},
+    "CRESD": {"symbol": "CRESY", "symbol_origin": "CRESY", "ratio": 10.0},
+    "CRESC": {"symbol": "CRESY", "symbol_origin": "CRESY", "ratio": 10.0},
+    "TECO2": {"symbol": "TEO", "symbol_origin": "TEO", "ratio": 5.0},
+    "TECO2D": {"symbol": "TEO", "symbol_origin": "TEO", "ratio": 5.0},
+    "TECO2C": {"symbol": "TEO", "symbol_origin": "TEO", "ratio": 5.0},
+    "LOMA": {"symbol": "LOMA", "symbol_origin": "LOMA", "ratio": 5.0},
+    "LOMAD": {"symbol": "LOMA", "symbol_origin": "LOMA", "ratio": 5.0},
+    "LOMAC": {"symbol": "LOMA", "symbol_origin": "LOMA", "ratio": 5.0},
+    "IRS": {"symbol": "IRS", "symbol_origin": "IRS", "ratio": 10.0},
+    "IRSD": {"symbol": "IRS", "symbol_origin": "IRS", "ratio": 10.0},
+    "IRSC": {"symbol": "IRS", "symbol_origin": "IRS", "ratio": 10.0},
+    "EDN": {"symbol": "EDN", "symbol_origin": "EDN", "ratio": 20.0},
+    "EDND": {"symbol": "EDN", "symbol_origin": "EDN", "ratio": 20.0},
+    "EDNC": {"symbol": "EDN", "symbol_origin": "EDN", "ratio": 20.0},
+    "TGS": {"symbol": "TGS", "symbol_origin": "TGS", "ratio": 5.0},
+    "TGSU2": {"symbol": "TGS", "symbol_origin": "TGS", "ratio": 5.0},
+    "TGSU2D": {"symbol": "TGS", "symbol_origin": "TGS", "ratio": 5.0},
+    "TGSU2C": {"symbol": "TGS", "symbol_origin": "TGS", "ratio": 5.0},
+    # Common Cedear ticker aliases
+    "GOGL": {"symbol": "GOOGL", "symbol_origin": "GOOGL", "ratio": 58.0},
+    "GOGLD": {"symbol": "GOOGL", "symbol_origin": "GOOGL", "ratio": 58.0},
+    "GOGLC": {"symbol": "GOOGL", "symbol_origin": "GOOGL", "ratio": 58.0},
+}
+
 # Load ratios on module import
 load_cedear_ratios()
 
 def get_cedear_info_by_symbol_and_date(symbol: str, date_val: Any = None) -> Dict[str, Any]:
     global cedear_ratios
-    sym_upper = symbol.strip().upper()
-    sym_clean = sym_upper[:-3] if sym_upper.endswith(".BA") else sym_upper
+    raw = str(symbol).strip().upper()
     
-    info = cedear_ratios.get(sym_clean)
-    if info:
+    # If string contains description pipe (e.g. "NUD | NU Holdings Ltd"), extract ticker part
+    if '|' in raw:
+        raw = raw.split('|')[0].strip()
+    else:
+        raw = raw.split()[0].strip() if raw else ""
+        
+    sym_clean = raw[:-3] if raw.endswith(".BA") else raw
+    
+    # 1. Direct alias check
+    if sym_clean in ADR_CEDEAR_ALIASES:
+        info = ADR_CEDEAR_ALIASES[sym_clean]
         res = {
             "ratio": info["ratio"],
             "symbol": info["symbol"],
             "symbol_origin": info["symbol_origin"]
         }
+    # 2. Direct cedear_ratios check
+    elif sym_clean in cedear_ratios:
+        info = cedear_ratios[sym_clean]
+        res = {
+            "ratio": info["ratio"],
+            "symbol": info["symbol"],
+            "symbol_origin": info["symbol_origin"]
+        }
+    # 3. Trailing D (MEP) or C (CCL) check if >= 3 characters
+    elif (sym_clean.endswith('D') or sym_clean.endswith('C')) and len(sym_clean) >= 3:
+        stripped = sym_clean[:-1]
+        if stripped in ADR_CEDEAR_ALIASES:
+            info = ADR_CEDEAR_ALIASES[stripped]
+            res = {
+                "ratio": info["ratio"],
+                "symbol": info["symbol"],
+                "symbol_origin": info["symbol_origin"]
+            }
+        elif stripped in cedear_ratios:
+            info = cedear_ratios[stripped]
+            res = {
+                "ratio": info["ratio"],
+                "symbol": info["symbol"],
+                "symbol_origin": info["symbol_origin"]
+            }
+        else:
+            res = {
+                "ratio": 1.0,
+                "symbol": sym_clean,
+                "symbol_origin": sym_clean
+            }
     else:
         res = {
             "ratio": 1.0,
@@ -379,7 +469,7 @@ def get_cedear_info_by_symbol_and_date(symbol: str, date_val: Any = None) -> Dic
             "symbol_origin": sym_clean
         }
         
-    if sym_clean == "SPY":
+    if res.get("symbol_origin") == "SPY" or sym_clean == "SPY":
         target_date = None
         if date_val is not None:
             if isinstance(date_val, (datetime.datetime, datetime.date)):
