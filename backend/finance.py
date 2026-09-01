@@ -78,13 +78,27 @@ class YahooFinanceClient:
             data = resp.json()
             results = []
             for quote in data.get("quotes", []):
-                if quote.get("quoteType") in ["EQUITY", "CRYPTO", "ETF", "INDEX"]:
+                qtype = quote.get("quoteType")
+                if qtype in ["EQUITY", "CRYPTO", "ETF", "INDEX", "FUTURE", "COMMODITY", "CURRENCY"]:
+                    sector = quote.get("sector")
+                    if not sector or sector == "N/A":
+                        if qtype in ["FUTURE", "COMMODITY"]:
+                            sector = "Commodities"
+                        elif qtype == "CRYPTO":
+                            sector = "Criptomonedas"
+                        elif qtype == "CURRENCY":
+                            sector = "Forex / Divisas"
+                        elif qtype == "INDEX":
+                            sector = "Indices"
+                        else:
+                            sector = "N/A"
+
                     results.append({
                         "symbol": quote.get("symbol"),
                         "name": quote.get("shortname") or quote.get("longname") or quote.get("symbol"),
                         "exchange": quote.get("exchange"),
-                        "quoteType": quote.get("quoteType"),
-                        "sector": quote.get("sector", "N/A"),
+                        "quoteType": qtype,
+                        "sector": sector,
                         "industry": quote.get("industry", "N/A")
                     })
             return results
