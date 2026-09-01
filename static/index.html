@@ -599,7 +599,12 @@
                     <template x-if="portfolioItems.length === 0">
                       <tr>
                         <td colspan="9" class="text-slate-500 text-center py-8 italic">
-                          No hay tenencias activas. Registra una operación de compra abajo para comenzar.
+                          <span x-show="isPortfolioLoading" class="text-[#00ff66] animate-pulse flex items-center justify-center gap-2">
+                            <span class="inline-block w-2 h-2 rounded-full bg-[#00ff66]"></span> Sincronizando cartera y cotizaciones en tiempo real...
+                          </span>
+                          <span x-show="!isPortfolioLoading">
+                            No hay tenencias activas. Registra una operación de compra abajo para comenzar.
+                          </span>
                         </td>
                       </tr>
                     </template>

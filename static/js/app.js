@@ -105,6 +105,12 @@ document.addEventListener('alpine:init', () => {
             if (this.isLoggedIn) {
                 await this.fetchWatchlists();
                 await this.fetchExchangeRate();
+
+                // Precarga en segundo plano de cartera para apertura instantánea
+                setTimeout(() => {
+                    this.fetchPortfolio();
+                    this.fetchTransactions();
+                }, 150);
             }
             this.isLoading = false;
 
@@ -230,6 +236,12 @@ document.addEventListener('alpine:init', () => {
                 // Cargar datos del usuario
                 await this.fetchWatchlists();
                 await this.fetchExchangeRate();
+
+                // Precarga en segundo plano de cartera
+                setTimeout(() => {
+                    this.fetchPortfolio();
+                    this.fetchTransactions();
+                }, 150);
 
                 if (this.activeView === 'portfolio') {
                     await this.fetchPortfolio();
@@ -399,10 +411,15 @@ document.addEventListener('alpine:init', () => {
             } else if (view === 'portfolio') {
                 this.stopAutoRefresh();
                 this.selectedStock = null;
-                this.isPortfolioLoading = true;
-                await Promise.all([this.fetchPortfolio(), this.fetchTransactions()]);
-                this.isPortfolioLoading = false;
+                if (!this.portfolioItems || this.portfolioItems.length === 0) {
+                    this.isPortfolioLoading = true;
+                }
                 this.startPortfolioRefresh();
+                
+                // Actualizar en segundo plano sin congelar la vista
+                Promise.all([this.fetchPortfolio(), this.fetchTransactions()]).finally(() => {
+                    this.isPortfolioLoading = false;
+                });
             }
         },
 

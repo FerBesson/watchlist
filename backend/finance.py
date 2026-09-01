@@ -22,10 +22,16 @@ class YahooFinanceClient:
         self.session_expiry = 1800  # Refresh session after 30 min
         self.failed_cooldown = 300  # Don't hammer crumb endpoint if failed, wait 5 min
         
-        # In-memory quote cache to prevent spamming on rapid polling (TTL: 15 seconds)
+        # In-memory quote cache to prevent spamming on rapid polling (TTL: 45 seconds)
         self._cache = {}
-        self._cache_ttl = 15
+        self._cache_ttl = 45
 
+    def warmup(self):
+        """Pre-warms the session in background so initial requests are instant."""
+        try:
+            self._init_session()
+        except Exception:
+            pass
 
     def _init_session(self):
         """Creates a requests session and retrieves the cookie + crumb from Yahoo Finance."""

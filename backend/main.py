@@ -29,8 +29,30 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import threading
+from sqlalchemy import text
+
 # Mount Auth Router
 app.include_router(auth_router)
+
+@app.on_event("startup")
+def startup_warmup():
+    def _warm():
+        # 1. Warm DB connection pool
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            print("[Database] Connection pool warmed successfully.")
+        except Exception as e:
+            print(f"[Database] Warmup warning: {e}")
+
+        # 2. Warm Yahoo Finance session
+        try:
+            finance_client.warmup()
+        except Exception as e:
+            print(f"[YahooFinance] Warmup warning: {e}")
+
+    threading.Thread(target=_warm, daemon=True).start()
 
 # --- HEALTHCHECK & KEEP-ALIVE PING ---
 @app.api_route("/api/ping", methods=["GET", "HEAD"])
