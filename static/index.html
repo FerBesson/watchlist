@@ -14,6 +14,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- ApexCharts CDN -->
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <!-- Custom JS Application -->
   <script defer src="/static/js/app.js?v=4.0"></script>
   <!-- Alpine.js CDN -->
@@ -24,13 +26,41 @@
   <!-- Subtle CRT scanline overlay -->
   <div class="crt-overlay"></div>
 
+  <!-- LOGIN OVERLAY WHEN NOT LOGGED IN -->
+  <div x-show="!isLoggedIn && !authChecking" x-cloak class="fixed inset-0 z-50 bg-[#070b12]/95 backdrop-blur-md flex items-center justify-center p-4 font-mono">
+    <div class="border border-[#00ff66] bg-[#0d121c] p-6 md:p-8 max-w-md w-full shadow-2xl shadow-[#00ff66]/10 text-center relative">
+      <div class="inline-flex items-center justify-center w-12 h-12 rounded bg-[#141c2b] border border-[#00ff66] mb-4 text-[#00ff66] text-xl font-bold glow-green">
+        &gt;_
+      </div>
+      <h2 class="text-base md:text-lg font-bold text-[#00ff66] glow-green uppercase mb-2">STOCK TRACKER TERMINAL</h2>
+      <p class="text-xs text-slate-400 mb-6 leading-relaxed">
+        Inicia sesión con tu cuenta de Google para acceder a tus watchlists personalizadas y sincronizar tus transacciones en la nube.
+      </p>
+
+      <div class="flex flex-col items-center justify-center min-h-[45px] mb-4">
+        <div id="google-signin-btn-container"></div>
+      </div>
+
+      <div x-show="!hasGoogleClientId" class="p-3 border border-amber-500/40 bg-amber-950/40 text-amber-300 text-[11px] rounded text-left mt-2 leading-normal">
+        <span class="font-bold text-amber-200">ℹ️ CONFIGURACIÓN PENDIENTE:</span><br>
+        Agrega tu <code class="text-white bg-black/40 px-1 py-0.5 rounded">GOOGLE_CLIENT_ID</code> en el archivo <code class="text-white bg-black/40 px-1 py-0.5 rounded">.env</code> para conectar el botón oficial de Google.
+      </div>
+    </div>
+  </div>
+
   <!-- MAIN HEADER -->
   <header class="border border-slate-800 bg-[#0d121c] p-4 mb-4 flex flex-col md:flex-row justify-between items-center gap-4">
     <div class="flex items-center gap-3">
-      <span class="text-[#00ff66] font-bold text-xl glow-green">&gt; TRACKER_ACCIONES_V1.0</span>
+      <span class="text-[#00ff66] font-bold text-xl glow-green">&gt; TRACKER_ACCIONES_V2.0</span>
       <span class="hidden md:inline text-slate-600">|</span>
-      <span class="text-xs text-slate-500 font-mono">USUARIO_REMOTO@ANTIGRAVITY</span>
+      <template x-if="isLoggedIn && currentUser">
+        <span class="text-xs text-[#00f0ff] font-mono" x-text="currentUser.email"></span>
+      </template>
+      <template x-if="!isLoggedIn">
+        <span class="text-xs text-slate-500 font-mono">MODO_INVITADO</span>
+      </template>
     </div>
+    
     <div class="flex flex-wrap items-center gap-4 text-xs font-mono text-slate-400">
       <div class="flex items-center gap-1.5">
         <span class="w-2.5 h-2.5 rounded-full bg-[#00ff66] animate-pulse"></span>
@@ -40,12 +70,22 @@
         <span>ACTUALIZADO: </span>
         <span class="text-[#00f0ff] glow-cyan" x-text="lastUpdated || 'N/A'"></span>
       </div>
-      <div>
-        <span>INTERVALO: </span>
-        <span class="text-amber-500">10s POLLING</span>
-      </div>
+
+      <!-- User Profile Badge & Logout -->
+      <template x-if="isLoggedIn && currentUser">
+        <div class="flex items-center gap-2 border border-slate-700 bg-[#141c2b] px-2.5 py-1 rounded">
+          <template x-if="currentUser.picture">
+            <img :src="currentUser.picture" alt="" class="w-4 h-4 rounded-full border border-[#00ff66]">
+          </template>
+          <span class="text-slate-200 font-bold text-xs" x-text="currentUser.name || currentUser.email"></span>
+          <button @click="logout()" title="Cerrar sesión" class="text-rose-400 hover:text-rose-300 ml-1 border-l border-slate-700 pl-2 hover:underline">
+            [SALIR]
+          </button>
+        </div>
+      </template>
     </div>
   </header>
+
 
   <!-- DASHBOARD BODY -->
   <main class="flex-grow grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
@@ -513,26 +553,26 @@
         <div class="flex flex-col gap-4 w-full flex-grow">
           
           <!-- SECCIÓN SUPERIOR: TENENCIAS + DISTRIBUCIÓN -->
-          <div class="grid grid-cols-1 lg:grid-cols-5 gap-4">
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
             
-            <!-- TABLA DE TENENCIAS CONSOLIDADAS (3/5 columnas) -->
-            <div class="lg:col-span-3 border border-slate-800 bg-[#0d121c] p-4 flex flex-col min-h-[220px]">
+            <!-- TABLA DE TENENCIAS CONSOLIDADAS (8/12 columnas) -->
+            <div class="lg:col-span-7 xl:col-span-8 border border-slate-800 bg-[#0d121c] p-4 flex flex-col min-h-[220px]">
               <h2 class="text-[#00ff66] glow-green font-mono text-sm font-bold mb-3 flex items-center gap-2">
                 <span class="text-slate-500">&gt;</span> TENENCIAS CONSOLIDADAS (PPC)
               </h2>
               <div class="overflow-x-auto flex-grow">
-                <table class="w-full term-table font-mono text-left text-xs">
+                <table class="w-full term-table term-table-compact font-mono text-left text-xs">
                   <thead>
                     <tr class="border-b border-slate-800 pb-2">
-                      <th class="py-2">TICKER (EXT)</th>
-                      <th>NOMINAL (VN)</th>
-                      <th>ACC. EQUIV.</th>
-                      <th>PPC COMP. (USD)</th>
-                      <th>VALOR INVERTIDO (USD)</th>
-                      <th>PRECIO AFUERA (USD)</th>
-                      <th>VALOR ACTUAL (USD)</th>
-                      <th>G/P LATENTE (USD)</th>
-                      <th>RENDIMIENTO</th>
+                      <th class="py-2" title="Ticker Internacional">TICKER</th>
+                      <th title="Valor Nominal">VN</th>
+                      <th title="Acciones Equivalentes">ACC. EQUIV.</th>
+                      <th title="Precio Promedio de Compra Comparable en USD">PPC (USD)</th>
+                      <th title="Monto Total Invertido en USD">INVERTIDO</th>
+                      <th title="Precio Internacional Exterior en USD">PRECIO EXT.</th>
+                      <th title="Valorización Actual en USD">VALOR ACT.</th>
+                      <th title="Ganancia / Pérdida Latente en USD">G/P LAT.</th>
+                      <th title="Rendimiento Porcentual">REND.</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -568,8 +608,8 @@
               </div>
             </div>
 
-            <!-- DISTRIBUCIÓN DE CARTERA (2/5 columnas) -->
-            <div class="lg:col-span-2 border border-slate-800 bg-[#0d121c] p-4 flex flex-col min-h-[220px]">
+            <!-- DISTRIBUCIÓN DE CARTERA (4/12 columnas) -->
+            <div class="lg:col-span-5 xl:col-span-4 border border-slate-800 bg-[#0d121c] p-4 flex flex-col min-h-[220px]">
               <h2 class="text-[#00ff66] glow-green font-mono text-sm font-bold mb-3 flex items-center gap-2">
                 <span class="text-slate-500">&gt;</span> DISTRIBUCIÓN DE CARTERA (VALOR ACTUAL USD)
               </h2>

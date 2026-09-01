@@ -2,7 +2,29 @@ from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
-# --- Watchlist Item ---
+# --- User & Auth ---
+class UserBase(BaseModel):
+    email: str
+    name: Optional[str] = None
+    picture: Optional[str] = None
+
+class UserResponse(UserBase):
+    id: int
+    google_id: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class GoogleAuthRequest(BaseModel):
+    token: str = Field(..., description="Google ID Token (JWT) from Google Identity Services")
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
 class WatchlistItemBase(BaseModel):
     symbol: str = Field(..., description="Ticker symbol (e.g., AAPL) OR section title if is_divider is True")
     notes: Optional[str] = None

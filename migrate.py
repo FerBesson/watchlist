@@ -30,6 +30,26 @@ def run_migration():
             cursor.execute("ALTER TABLE watchlist_items ADD COLUMN \"order\" INTEGER DEFAULT 0 NOT NULL")
             migrated = True
             
+        # --- Migrar Tabla users ---
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")
+        users_table_exists = cursor.fetchone()
+        if not users_table_exists:
+            print("Creating 'users' table...")
+            cursor.execute("""
+                CREATE TABLE users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    google_id TEXT NOT NULL,
+                    email TEXT NOT NULL,
+                    name TEXT,
+                    picture TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            cursor.execute("CREATE UNIQUE INDEX ix_users_google_id ON users (google_id)")
+            cursor.execute("CREATE UNIQUE INDEX ix_users_email ON users (email)")
+            cursor.execute("CREATE INDEX ix_users_id ON users (id)")
+            migrated = True
+
         # --- Migrar Tabla watchlists ---
         cursor.execute("PRAGMA table_info(watchlists)")
         wl_columns = [row[1] for row in cursor.fetchall()]
@@ -39,7 +59,13 @@ def run_migration():
             cursor.execute("ALTER TABLE watchlists ADD COLUMN \"order\" INTEGER DEFAULT 0 NOT NULL")
             migrated = True
             
-        # --- Crear Tabla transactions si no existe ---
+        if "user_id" not in wl_columns:
+            print("Adding column 'user_id' to watchlists...")
+            cursor.execute("ALTER TABLE watchlists ADD COLUMN user_id INTEGER REFERENCES users(id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS ix_watchlists_user_id ON watchlists (user_id)")
+            migrated = True
+
+        # --- Crear o Migrar Tabla transactions ---
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='transactions'")
         table_exists = cursor.fetchone()
         
@@ -48,6 +74,7 @@ def run_migration():
             cursor.execute("""
                 CREATE TABLE transactions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER REFERENCES users(id),
                     symbol TEXT NOT NULL,
                     operation_type TEXT NOT NULL,
                     quantity REAL NOT NULL,
@@ -62,7 +89,17 @@ def run_migration():
             """)
             cursor.execute("CREATE INDEX ix_transactions_id ON transactions (id)")
             cursor.execute("CREATE INDEX ix_transactions_symbol ON transactions (symbol)")
+            cursor.execute("CREATE INDEX ix_transactions_user_id ON transactions (user_id)")
             migrated = True
+        else:
+            cursor.execute("PRAGMA table_info(transactions)")
+            tx_columns = [row[1] for row in cursor.fetchall()]
+            if "user_id" not in tx_columns:
+                print("Adding column 'user_id' to transactions...")
+                cursor.execute("ALTER TABLE transactions ADD COLUMN user_id INTEGER REFERENCES users(id)")
+                cursor.execute("CREATE INDEX IF NOT EXISTS ix_transactions_user_id ON transactions (user_id)")
+                migrated = True
+
             
         if migrated:
             conn.commit()

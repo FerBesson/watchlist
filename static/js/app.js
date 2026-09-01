@@ -1,5 +1,12 @@
 document.addEventListener('alpine:init', () => {
     Alpine.data('stockApp', () => ({
+        // Auth State
+        isLoggedIn: false,
+        authChecking: true,
+        currentUser: null,
+        authToken: localStorage.getItem('auth_token') || null,
+        hasGoogleClientId: false,
+        googleClientId: null,
         // State
         watchlists: [],
         currentWatchlistId: null,
@@ -93,24 +100,169 @@ document.addEventListener('alpine:init', () => {
         // Init App
         async init() {
             this.isLoading = true;
-            await this.fetchWatchlists();
-            this.isLoading = false;
+            await this.checkAuthStatus();
 
-            // Fetch initial exchange rate
-            await this.fetchExchangeRate();
+            if (this.isLoggedIn) {
+                await this.fetchWatchlists();
+                await this.fetchExchangeRate();
+            }
+            this.isLoading = false;
 
             // Watch for changes in date or currency to update exchange rate and ratio
             this.$watch('txForm.date', () => {
-                this.fetchExchangeRate();
-                this.fetchCedearRatio();
+                if (this.isLoggedIn) {
+                    this.fetchExchangeRate();
+                    this.fetchCedearRatio();
+                }
             });
-            this.$watch('txForm.currency', () => this.fetchExchangeRate());
+            this.$watch('txForm.currency', () => {
+                if (this.isLoggedIn) {
+                    this.fetchExchangeRate();
+                }
+            });
         },
+        // --- AUTHENTICATION METHODS ---
+        async authFetch(url, options = {}) {
+            options.headers = options.headers || {};
+            if (this.authToken) {
+                if (options.headers instanceof Headers) {
+                    options.headers.set('Authorization', `Bearer ${this.authToken}`);
+                } else {
+                    options.headers['Authorization'] = `Bearer ${this.authToken}`;
+                }
+            }
+            const response = await fetch(url, options);
+            if (response.status === 401 && this.isLoggedIn) {
+                console.warn('[Auth] Sesión expirada o token inválido.');
+                this.logout();
+            }
+            return response;
+        },
+
+        async checkAuthStatus() {
+            this.authChecking = true;
+            try {
+                // 1. Obtener configuración pública (Google Client ID)
+                const configRes = await fetch('/api/auth/config');
+                if (configRes.ok) {
+                    const cfg = await configRes.json();
+                    if (cfg.google_client_id) {
+                        this.googleClientId = cfg.google_client_id;
+                        this.hasGoogleClientId = true;
+                    }
+                }
+
+                // 2. Verificar token actual si existe
+                if (this.authToken) {
+                    const meRes = await this.authFetch('/api/auth/me');
+                    if (meRes.ok) {
+                        this.currentUser = await meRes.json();
+                        this.isLoggedIn = true;
+                    } else {
+                        this.authToken = null;
+                        localStorage.removeItem('auth_token');
+                        this.isLoggedIn = false;
+                    }
+                }
+            } catch (e) {
+                console.error('[Auth] Error verificando estado de auth:', e);
+            } finally {
+                this.authChecking = false;
+                if (!this.isLoggedIn) {
+                    this.$nextTick(() => this.initGoogleSignIn());
+                }
+            }
+        },
+
+        initGoogleSignIn() {
+            if (!this.googleClientId) {
+                console.warn('[Google Auth] GOOGLE_CLIENT_ID no configurado en el backend (.env).');
+                return;
+            }
+
+            const checkGis = () => {
+                if (window.google && window.google.accounts && window.google.accounts.id) {
+                    window.google.accounts.id.initialize({
+                        client_id: this.googleClientId,
+                        callback: (res) => this.handleGoogleCredential(res)
+                    });
+
+                    const btnContainer = document.getElementById('google-signin-btn-container');
+                    if (btnContainer) {
+                        btnContainer.innerHTML = '';
+                        window.google.accounts.id.renderButton(btnContainer, {
+                            theme: 'filled_black',
+                            size: 'large',
+                            shape: 'rectangular',
+                            text: 'signin_with',
+                            logo_alignment: 'left',
+                            width: 280
+                        });
+                    }
+                } else {
+                    setTimeout(checkGis, 200);
+                }
+            };
+            checkGis();
+        },
+
+        async handleGoogleCredential(response) {
+            try {
+                this.isLoading = true;
+                const res = await fetch('/api/auth/google', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: response.credential })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert('Error de inicio de sesión: ' + (err.detail || 'No se pudo verificar'));
+                    return;
+                }
+
+                const data = await res.json();
+                this.authToken = data.access_token;
+                localStorage.setItem('auth_token', data.access_token);
+                this.currentUser = data.user;
+                this.isLoggedIn = true;
+
+                // Cargar datos del usuario
+                await this.fetchWatchlists();
+                await this.fetchExchangeRate();
+
+                if (this.activeView === 'portfolio') {
+                    await this.fetchPortfolio();
+                    await this.fetchTransactions();
+                }
+            } catch (e) {
+                console.error('Error al iniciar sesión:', e);
+                alert('Error al conectar con el servidor para iniciar sesión');
+            } finally {
+                this.isLoading = false;
+            }
+        },
+
+        logout() {
+            this.stopAutoRefresh();
+            this.stopPortfolioAutoRefresh();
+            localStorage.removeItem('auth_token');
+            this.authToken = null;
+            this.currentUser = null;
+            this.isLoggedIn = false;
+            this.watchlists = [];
+            this.watchlistItems = [];
+            this.portfolioItems = [];
+            this.transactions = [];
+            this.closedTrades = [];
+            this.$nextTick(() => this.initGoogleSignIn());
+        },
+
 
         // Fetch all watchlists
         async fetchWatchlists() {
             try {
-                const response = await fetch('/api/watchlists');
+                const response = await this.authFetch('/api/watchlists');
                 if (response.ok) {
                     this.watchlists = await response.json();
                 }
@@ -150,7 +302,7 @@ document.addEventListener('alpine:init', () => {
             if (!this.currentWatchlistId) return;
             this.isQuotesLoading = true;
             try {
-                const response = await fetch(`/api/watchlists/${this.currentWatchlistId}/quotes`);
+                const response = await this.authFetch(`/api/watchlists/${this.currentWatchlistId}/quotes`);
                 if (response.ok) {
                     const newItems = await response.json();
                     
@@ -232,7 +384,7 @@ document.addEventListener('alpine:init', () => {
         // Fetch consolidated portfolio data
         async fetchPortfolio() {
             try {
-                const response = await fetch('/api/portfolio');
+                const response = await this.authFetch('/api/portfolio');
                 if (response.ok) {
                     const data = await response.json();
                     this.portfolioItems = data.items;
@@ -253,7 +405,7 @@ document.addEventListener('alpine:init', () => {
         // Fetch transactions log
         async fetchTransactions() {
             try {
-                const response = await fetch('/api/transactions');
+                const response = await this.authFetch('/api/transactions');
                 if (response.ok) {
                     this.transactions = await response.json();
                 }
@@ -304,7 +456,7 @@ document.addEventListener('alpine:init', () => {
             const method = isEditing ? 'PUT' : 'POST';
 
             try {
-                const response = await fetch(url, {
+                const response = await this.authFetch(url, {
                     method: method,
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -398,7 +550,7 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
             try {
-                const response = await fetch(`/api/transactions/${id}`, {
+                const response = await this.authFetch(`/api/transactions/${id}`, {
                     method: 'DELETE'
                 });
                 if (response.ok) {
@@ -425,7 +577,7 @@ document.addEventListener('alpine:init', () => {
 
             this.isImporting = true;
             try {
-                const response = await fetch('/api/transactions/import', {
+                const response = await this.authFetch('/api/transactions/import', {
                     method: 'POST',
                     body: formData
                 });
@@ -453,7 +605,7 @@ document.addEventListener('alpine:init', () => {
                 return;
             }
             try {
-                const response = await fetch('/api/transactions', {
+                const response = await this.authFetch('/api/transactions', {
                     method: 'DELETE'
                 });
                 if (response.ok) {
@@ -507,7 +659,7 @@ document.addEventListener('alpine:init', () => {
             
             const metricsStr = this.selectedMetrics.join(',');
             try {
-                const response = await fetch('/api/watchlists', {
+                const response = await this.authFetch('/api/watchlists', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -551,7 +703,7 @@ document.addEventListener('alpine:init', () => {
             if (!name) return; // Cancel if empty
             
             try {
-                const response = await fetch(`/api/watchlists/${id}`, {
+                const response = await this.authFetch(`/api/watchlists/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -579,7 +731,7 @@ document.addEventListener('alpine:init', () => {
             if (!confirm('¿Estás seguro de eliminar esta lista de seguimiento?')) return;
             
             try {
-                const response = await fetch(`/api/watchlists/${id}`, {
+                const response = await this.authFetch(`/api/watchlists/${id}`, {
                     method: 'DELETE'
                 });
                 
@@ -615,7 +767,7 @@ document.addEventListener('alpine:init', () => {
             if (this.currentWatchlistId) {
                 const metricsStr = this.selectedMetrics.join(',');
                 try {
-                    await fetch(`/api/watchlists/${this.currentWatchlistId}`, {
+                    await this.authFetch(`/api/watchlists/${this.currentWatchlistId}`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -649,7 +801,7 @@ document.addEventListener('alpine:init', () => {
             this.isSearching = true;
             this.searchTimeout = setTimeout(async () => {
                 try {
-                    const response = await fetch(`/api/search?q=${encodeURIComponent(this.searchQuery.trim())}`);
+                    const response = await this.authFetch(`/api/search?q=${encodeURIComponent(this.searchQuery.trim())}`);
                     if (response.ok) {
                         this.searchResults = await response.json();
                     }
@@ -680,7 +832,7 @@ document.addEventListener('alpine:init', () => {
 
             this.portfolioSearchTimeout = setTimeout(async () => {
                 try {
-                    const response = await fetch(`/api/search?q=${encodeURIComponent(this.txForm.symbol.trim())}`);
+                    const response = await this.authFetch(`/api/search?q=${encodeURIComponent(this.txForm.symbol.trim())}`);
                     if (response.ok) {
                         this.portfolioSearchResults = await response.json();
                     }
@@ -704,7 +856,7 @@ document.addEventListener('alpine:init', () => {
             
             try {
                 const dateStr = this.txForm.date || '';
-                const response = await fetch(`/api/cedear-info/${symbol}?date=${encodeURIComponent(dateStr)}`);
+                const response = await this.authFetch(`/api/cedear-info/${symbol}?date=${encodeURIComponent(dateStr)}`);
                 if (response.ok) {
                     const data = await response.json();
                     if (data && data.ratio) {
@@ -727,7 +879,7 @@ document.addEventListener('alpine:init', () => {
             if (dateStr && dateStr.length < 10) return;
             
             try {
-                const response = await fetch(`/api/exchange-rate?date=${encodeURIComponent(dateStr)}&currency=${encodeURIComponent(currency)}`);
+                const response = await this.authFetch(`/api/exchange-rate?date=${encodeURIComponent(dateStr)}&currency=${encodeURIComponent(currency)}`);
                 if (response.ok) {
                     const data = await response.json();
                     if (data && data.exchange_rate_input !== undefined) {
@@ -747,7 +899,7 @@ document.addEventListener('alpine:init', () => {
             if (dateStr && dateStr.length < 10) return;
             
             try {
-                const response = await fetch(`/api/cedear-info/${encodeURIComponent(symbol)}?date=${encodeURIComponent(dateStr)}`);
+                const response = await this.authFetch(`/api/cedear-info/${encodeURIComponent(symbol)}?date=${encodeURIComponent(dateStr)}`);
                 if (response.ok) {
                     const data = await response.json();
                     if (data && data.ratio !== undefined) {
@@ -771,7 +923,7 @@ document.addEventListener('alpine:init', () => {
             if (!this.currentWatchlistId) return;
             this.isLoading = true;
             try {
-                const response = await fetch(`/api/watchlists/${this.currentWatchlistId}/items`, {
+                const response = await this.authFetch(`/api/watchlists/${this.currentWatchlistId}/items`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ symbol: symbol })
@@ -799,7 +951,7 @@ document.addEventListener('alpine:init', () => {
             
             this.isLoading = true;
             try {
-                const response = await fetch(`/api/watchlists/${this.currentWatchlistId}/items/${symbol}`, {
+                const response = await this.authFetch(`/api/watchlists/${this.currentWatchlistId}/items/${symbol}`, {
                     method: 'DELETE'
                 });
 
@@ -824,7 +976,7 @@ document.addEventListener('alpine:init', () => {
             
             this.isLoading = true;
             try {
-                const response = await fetch(`/api/watchlists/${this.currentWatchlistId}/items`, {
+                const response = await this.authFetch(`/api/watchlists/${this.currentWatchlistId}/items`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -850,7 +1002,7 @@ document.addEventListener('alpine:init', () => {
         async moveItem(itemId, direction) {
             if (!this.currentWatchlistId) return;
             try {
-                const response = await fetch(`/api/watchlists/${this.currentWatchlistId}/items/${itemId}/move?direction=${direction}`, {
+                const response = await this.authFetch(`/api/watchlists/${this.currentWatchlistId}/items/${itemId}/move?direction=${direction}`, {
                     method: 'POST'
                 });
                 if (response.ok) {
@@ -891,7 +1043,7 @@ document.addEventListener('alpine:init', () => {
                         const itemIds = Array.from(rows).map(row => parseInt(row.getAttribute('data-id')));
                         
                         try {
-                            const response = await fetch(`/api/watchlists/${this.currentWatchlistId}/reorder`, {
+                            const response = await this.authFetch(`/api/watchlists/${this.currentWatchlistId}/reorder`, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify(itemIds)
@@ -931,7 +1083,7 @@ document.addEventListener('alpine:init', () => {
             if (!name) return; // Cancel if empty
             
             try {
-                const response = await fetch(`/api/watchlists/${this.currentWatchlistId}/items/${id}`, {
+                const response = await this.authFetch(`/api/watchlists/${this.currentWatchlistId}/items/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -975,7 +1127,7 @@ document.addEventListener('alpine:init', () => {
                         const wlIds = Array.from(rows).map(row => parseInt(row.getAttribute('data-wl-id')));
                         
                         try {
-                            const response = await fetch('/api/watchlists/reorder', {
+                            const response = await this.authFetch('/api/watchlists/reorder', {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
                                 body: JSON.stringify(wlIds)
@@ -1012,7 +1164,7 @@ document.addEventListener('alpine:init', () => {
             const range = this.chartRange;
             
             try {
-                const response = await fetch(`/api/charts/${symbol}?range=${range}`);
+                const response = await this.authFetch(`/api/charts/${symbol}?range=${range}`);
                 if (response.ok) {
                     const data = await response.json();
                     this.renderChart(data);

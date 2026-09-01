@@ -5,21 +5,34 @@ from . import models, schemas
 
 # --- Watchlist Operations ---
 
-def get_watchlist(db: Session, watchlist_id: int):
-    return db.query(models.Watchlist).filter(models.Watchlist.id == watchlist_id).first()
+def get_watchlist(db: Session, watchlist_id: int, user_id: Optional[int] = None):
+    query = db.query(models.Watchlist).filter(models.Watchlist.id == watchlist_id)
+    if user_id is not None:
+        query = query.filter(models.Watchlist.user_id == user_id)
+    return query.first()
 
-def get_watchlist_by_name(db: Session, name: str):
-    return db.query(models.Watchlist).filter(models.Watchlist.name == name).first()
+def get_watchlist_by_name(db: Session, name: str, user_id: Optional[int] = None):
+    query = db.query(models.Watchlist).filter(models.Watchlist.name == name)
+    if user_id is not None:
+        query = query.filter(models.Watchlist.user_id == user_id)
+    return query.first()
 
-def get_watchlists(db: Session, skip: int = 0, limit: int = 100):
+def get_watchlists(db: Session, user_id: Optional[int] = None, skip: int = 0, limit: int = 100):
     # Sort watchlists by order ascending, then by database id
-    return db.query(models.Watchlist).order_by(models.Watchlist.order.asc(), models.Watchlist.id.asc()).offset(skip).limit(limit).all()
+    query = db.query(models.Watchlist)
+    if user_id is not None:
+        query = query.filter(models.Watchlist.user_id == user_id)
+    return query.order_by(models.Watchlist.order.asc(), models.Watchlist.id.asc()).offset(skip).limit(limit).all()
 
-def create_watchlist(db: Session, watchlist: schemas.WatchlistCreate):
-    # Get max order currently in watchlists
-    max_order = db.query(func.max(models.Watchlist.order)).scalar() or 0
+def create_watchlist(db: Session, watchlist: schemas.WatchlistCreate, user_id: Optional[int] = None):
+    # Get max order currently in watchlists for this user
+    max_order_q = db.query(func.max(models.Watchlist.order))
+    if user_id is not None:
+        max_order_q = max_order_q.filter(models.Watchlist.user_id == user_id)
+    max_order = max_order_q.scalar() or 0
     
     db_watchlist = models.Watchlist(
+        user_id=user_id,
         name=watchlist.name,
         description=watchlist.description,
         metrics=watchlist.metrics,
@@ -30,8 +43,8 @@ def create_watchlist(db: Session, watchlist: schemas.WatchlistCreate):
     db.refresh(db_watchlist)
     return db_watchlist
 
-def update_watchlist(db: Session, watchlist_id: int, watchlist_update: schemas.WatchlistUpdate):
-    db_watchlist = get_watchlist(db, watchlist_id)
+def update_watchlist(db: Session, watchlist_id: int, watchlist_update: schemas.WatchlistUpdate, user_id: Optional[int] = None):
+    db_watchlist = get_watchlist(db, watchlist_id, user_id=user_id)
     if not db_watchlist:
         return None
     
@@ -43,17 +56,20 @@ def update_watchlist(db: Session, watchlist_id: int, watchlist_update: schemas.W
     db.refresh(db_watchlist)
     return db_watchlist
 
-def delete_watchlist(db: Session, watchlist_id: int):
-    db_watchlist = get_watchlist(db, watchlist_id)
+def delete_watchlist(db: Session, watchlist_id: int, user_id: Optional[int] = None):
+    db_watchlist = get_watchlist(db, watchlist_id, user_id=user_id)
     if db_watchlist:
         db.delete(db_watchlist)
         db.commit()
         return True
     return False
 
-def reorder_watchlists(db: Session, watchlist_ids: list[int]) -> bool:
+def reorder_watchlists(db: Session, watchlist_ids: list[int], user_id: Optional[int] = None) -> bool:
     """Reorder multiple watchlists in bulk by assigning sequence order indices."""
-    watchlists = db.query(models.Watchlist).all()
+    query = db.query(models.Watchlist)
+    if user_id is not None:
+        query = query.filter(models.Watchlist.user_id == user_id)
+    watchlists = query.all()
     watchlists_dict = {wl.id: wl for wl in watchlists}
     
     for index, wl_id in enumerate(watchlist_ids):
@@ -62,6 +78,7 @@ def reorder_watchlists(db: Session, watchlist_ids: list[int]) -> bool:
             
     db.commit()
     return True
+
 
 
 # --- Watchlist Item Operations ---
@@ -179,11 +196,12 @@ def move_watchlist_item(db: Session, watchlist_id: int, item_id: int, direction:
 
 # --- Transaction & Portfolio Operations ---
 
-def create_transaction(db: Session, tx: schemas.TransactionCreate):
+def create_transaction(db: Session, tx: schemas.TransactionCreate, user_id: Optional[int] = None):
     symbol_formatted = tx.symbol.strip().upper()
     price_comparable = tx.price * tx.ratio * tx.exchange_rate
     
     db_tx = models.Transaction(
+        user_id=user_id,
         symbol=symbol_formatted,
         operation_type=tx.operation_type,
         quantity=tx.quantity,
@@ -200,11 +218,17 @@ def create_transaction(db: Session, tx: schemas.TransactionCreate):
     db.refresh(db_tx)
     return db_tx
 
-def get_transactions(db: Session, skip: int = 0, limit: int = 100):
-    return db.query(models.Transaction).order_by(models.Transaction.date.desc(), models.Transaction.id.desc()).offset(skip).limit(limit).all()
+def get_transactions(db: Session, user_id: Optional[int] = None, skip: int = 0, limit: int = 100):
+    query = db.query(models.Transaction)
+    if user_id is not None:
+        query = query.filter(models.Transaction.user_id == user_id)
+    return query.order_by(models.Transaction.date.desc(), models.Transaction.id.desc()).offset(skip).limit(limit).all()
 
-def update_transaction(db: Session, tx_id: int, tx_update: schemas.TransactionUpdate) -> Optional[models.Transaction]:
-    db_tx = db.query(models.Transaction).filter(models.Transaction.id == tx_id).first()
+def update_transaction(db: Session, tx_id: int, tx_update: schemas.TransactionUpdate, user_id: Optional[int] = None) -> Optional[models.Transaction]:
+    query = db.query(models.Transaction).filter(models.Transaction.id == tx_id)
+    if user_id is not None:
+        query = query.filter(models.Transaction.user_id == user_id)
+    db_tx = query.first()
     if not db_tx:
         return None
     
@@ -227,20 +251,27 @@ def update_transaction(db: Session, tx_id: int, tx_update: schemas.TransactionUp
     db.refresh(db_tx)
     return db_tx
 
-def delete_transaction(db: Session, tx_id: int) -> bool:
-    db_tx = db.query(models.Transaction).filter(models.Transaction.id == tx_id).first()
+def delete_transaction(db: Session, tx_id: int, user_id: Optional[int] = None) -> bool:
+    query = db.query(models.Transaction).filter(models.Transaction.id == tx_id)
+    if user_id is not None:
+        query = query.filter(models.Transaction.user_id == user_id)
+    db_tx = query.first()
     if db_tx:
         db.delete(db_tx)
         db.commit()
         return True
     return False
 
-def get_portfolio(db: Session):
+def get_portfolio(db: Session, user_id: Optional[int] = None):
     # Fetch transactions in chronological order to calculate PPC
-    txs = db.query(models.Transaction).order_by(models.Transaction.date.asc(), models.Transaction.id.asc()).all()
+    query = db.query(models.Transaction)
+    if user_id is not None:
+        query = query.filter(models.Transaction.user_id == user_id)
+    txs = query.order_by(models.Transaction.date.asc(), models.Transaction.id.asc()).all()
     
     portfolio = {}
     realized_pnl = 0.0
+
     realized_pnl_cost = 0.0
     closed_trades = []
     cash_balance = 0.0

@@ -22,8 +22,10 @@ share/python-wheels/
 *.egg
 MANIFEST
 
-# Environments
+# Environments & Secrets
 .env
+.env.local
+.env.*.local
 .venv
 env/
 venv/
@@ -31,8 +33,18 @@ ENV/
 env.bak/
 venv.bak/
 
-# IDEs
+# Databases & Backups (Sensitive local data)
+*.db
+*.sqlite
+*.sqlite3
+watchlists.db
+backups/
+
+# IDEs & System
 .vscode/
 .idea/
 *.swp
 *.swo
+.DS_Store
+Thumbs.db
+

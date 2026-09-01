@@ -9,14 +9,15 @@ from sqlalchemy.orm import Session
 from .database import engine, get_db, Base
 from . import models, schemas, crud
 from .finance import finance_client
+from .auth import router as auth_router, get_current_user
 
 # Create database tables
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Tracker de Acciones - Terminal Style",
-    description="Backend en FastAPI para seguimiento de acciones utilizando Yahoo Finance",
-    version="1.0.0"
+    description="Backend en FastAPI para seguimiento de acciones con autenticación Google y multiusuario",
+    version="2.0.0"
 )
 
 # CORS middleware to allow local development
@@ -28,111 +29,94 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from .database import SessionLocal
-
-@app.on_event("startup")
-def startup_event():
-    db = SessionLocal()
-    try:
-        watchlists = crud.get_watchlists(db)
-        if not watchlists:
-            # Create a default watchlist
-            default_wl = schemas.WatchlistCreate(
-                name="Favoritas",
-                description="Mi lista de seguimiento principal para acciones globales y criptomonedas",
-                metrics="sector,price,prev_close,change_percent"
-            )
-            created_wl = crud.create_watchlist(db, default_wl)
-            
-            # Add section divider: CARTERA
-            crud.add_item_to_watchlist(
-                db,
-                watchlist_id=created_wl.id,
-                item=schemas.WatchlistItemCreate(symbol="CARTERA", is_divider=True)
-            )
-            
-            # Add stocks under CARTERA
-            tech_stocks = ["AAPL", "MSFT", "TSLA"]
-            for sym in tech_stocks:
-                crud.add_item_to_watchlist(
-                    db,
-                    watchlist_id=created_wl.id,
-                    item=schemas.WatchlistItemCreate(symbol=sym, is_divider=False, notes="Acción tecnológica")
-                )
-                
-            # Add section divider: CRIPTO
-            crud.add_item_to_watchlist(
-                db,
-                watchlist_id=created_wl.id,
-                item=schemas.WatchlistItemCreate(symbol="CRIPTO", is_divider=True)
-            )
-            
-            # Add stock under CRIPTO
-            crud.add_item_to_watchlist(
-                db,
-                watchlist_id=created_wl.id,
-                item=schemas.WatchlistItemCreate(symbol="BTC-USD", is_divider=False, notes="Moneda digital principal")
-            )
-            
-            print("[Database] Seeded default watchlist 'Favoritas' with section dividers and assets.")
-    except Exception as e:
-        print(f"[Database] Error seeding database: {e}")
-    finally:
-        db.close()
+# Mount Auth Router
+app.include_router(auth_router)
 
 # --- WATCHLIST ENDPOINTS ---
 
 @app.get("/api/watchlists", response_model=List[schemas.Watchlist])
-def read_watchlists(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Retrieve all watchlists."""
-    return crud.get_watchlists(db, skip=skip, limit=limit)
+def read_watchlists(
+    skip: int = 0, 
+    limit: int = 100, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    """Retrieve all watchlists for the logged in user."""
+    return crud.get_watchlists(db, user_id=current_user.id, skip=skip, limit=limit)
 
 @app.get("/api/watchlists/{watchlist_id}", response_model=schemas.Watchlist)
-def read_watchlist(watchlist_id: int, db: Session = Depends(get_db)):
-    """Retrieve a single watchlist by ID."""
-    db_watchlist = crud.get_watchlist(db, watchlist_id)
+def read_watchlist(
+    watchlist_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    """Retrieve a single watchlist by ID belonging to current user."""
+    db_watchlist = crud.get_watchlist(db, watchlist_id, user_id=current_user.id)
     if db_watchlist is None:
         raise HTTPException(status_code=404, detail="Watchlist not found")
     return db_watchlist
 
 @app.post("/api/watchlists", response_model=schemas.Watchlist, status_code=status.HTTP_201_CREATED)
-def create_watchlist(watchlist: schemas.WatchlistCreate, db: Session = Depends(get_db)):
-    """Create a new watchlist."""
-    db_watchlist_exists = crud.get_watchlist_by_name(db, name=watchlist.name)
+def create_watchlist(
+    watchlist: schemas.WatchlistCreate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    """Create a new watchlist for current user."""
+    db_watchlist_exists = crud.get_watchlist_by_name(db, name=watchlist.name, user_id=current_user.id)
     if db_watchlist_exists:
         raise HTTPException(status_code=400, detail="Watchlist with this name already exists")
-    return crud.create_watchlist(db=db, watchlist=watchlist)
+    return crud.create_watchlist(db=db, watchlist=watchlist, user_id=current_user.id)
 
 @app.put("/api/watchlists/{watchlist_id}", response_model=schemas.Watchlist)
-def update_watchlist(watchlist_id: int, watchlist: schemas.WatchlistUpdate, db: Session = Depends(get_db)):
+def update_watchlist(
+    watchlist_id: int, 
+    watchlist: schemas.WatchlistUpdate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
     """Update a watchlist (name, description, or metrics)."""
-    db_watchlist = crud.update_watchlist(db=db, watchlist_id=watchlist_id, watchlist_update=watchlist)
+    db_watchlist = crud.update_watchlist(db=db, watchlist_id=watchlist_id, watchlist_update=watchlist, user_id=current_user.id)
     if db_watchlist is None:
         raise HTTPException(status_code=404, detail="Watchlist not found")
     return db_watchlist
 
 @app.delete("/api/watchlists/{watchlist_id}")
-def delete_watchlist(watchlist_id: int, db: Session = Depends(get_db)):
+def delete_watchlist(
+    watchlist_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
     """Delete a watchlist."""
-    success = crud.delete_watchlist(db=db, watchlist_id=watchlist_id)
+    success = crud.delete_watchlist(db=db, watchlist_id=watchlist_id, user_id=current_user.id)
     if not success:
         raise HTTPException(status_code=404, detail="Watchlist not found")
     return {"message": "Watchlist deleted successfully", "id": watchlist_id}
 
 @app.post("/api/watchlists/reorder")
-def reorder_watchlists_list(watchlist_ids: List[int], db: Session = Depends(get_db)):
+def reorder_watchlists_list(
+    watchlist_ids: List[int], 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
     """Reorder multiple watchlists in bulk by updating their sequence order."""
-    crud.reorder_watchlists(db=db, watchlist_ids=watchlist_ids)
+    crud.reorder_watchlists(db=db, watchlist_ids=watchlist_ids, user_id=current_user.id)
     return {"message": "Watchlists reordered successfully", "watchlist_ids": watchlist_ids}
+
 
 
 
 # --- WATCHLIST ITEM ENDPOINTS ---
 
 @app.post("/api/watchlists/{watchlist_id}/items", response_model=schemas.WatchlistItem, status_code=status.HTTP_201_CREATED)
-def add_item_to_watchlist(watchlist_id: int, item: schemas.WatchlistItemCreate, db: Session = Depends(get_db)):
+def add_item_to_watchlist(
+    watchlist_id: int, 
+    item: schemas.WatchlistItemCreate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
     """Add a stock symbol to a watchlist."""
-    db_watchlist = crud.get_watchlist(db, watchlist_id)
+    db_watchlist = crud.get_watchlist(db, watchlist_id, user_id=current_user.id)
     if db_watchlist is None:
         raise HTTPException(status_code=404, detail="Watchlist not found")
     
@@ -144,9 +128,14 @@ def add_item_to_watchlist(watchlist_id: int, item: schemas.WatchlistItemCreate, 
     return crud.add_item_to_watchlist(db=db, watchlist_id=watchlist_id, item=item)
 
 @app.delete("/api/watchlists/{watchlist_id}/items/{symbol}")
-def delete_item_from_watchlist(watchlist_id: int, symbol: str, db: Session = Depends(get_db)):
+def delete_item_from_watchlist(
+    watchlist_id: int, 
+    symbol: str, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
     """Remove a stock symbol from a watchlist."""
-    db_watchlist = crud.get_watchlist(db, watchlist_id)
+    db_watchlist = crud.get_watchlist(db, watchlist_id, user_id=current_user.id)
     if db_watchlist is None:
         raise HTTPException(status_code=404, detail="Watchlist not found")
         
@@ -172,12 +161,16 @@ def get_realtime_quotes(symbols: str = Query(..., description="Comma-separated l
     return finance_client.get_quotes(symbol_list)
 
 @app.get("/api/watchlists/{watchlist_id}/quotes")
-def get_watchlist_realtime_quotes(watchlist_id: int, db: Session = Depends(get_db)):
+def get_watchlist_realtime_quotes(
+    watchlist_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
     """
     Get real-time quotes aggregated with watchlist database metadata.
     Returns details for each stock in the watchlist, sorted by order.
     """
-    db_watchlist = crud.get_watchlist(db, watchlist_id)
+    db_watchlist = crud.get_watchlist(db, watchlist_id, user_id=current_user.id)
     if db_watchlist is None:
         raise HTTPException(status_code=404, detail="Watchlist not found")
         
@@ -239,8 +232,18 @@ def get_watchlist_realtime_quotes(watchlist_id: int, db: Session = Depends(get_d
     return merged_data
 
 @app.post("/api/watchlists/{watchlist_id}/items/{item_id}/move")
-def move_watchlist_item(watchlist_id: int, item_id: int, direction: str, db: Session = Depends(get_db)):
+def move_watchlist_item(
+    watchlist_id: int, 
+    item_id: int, 
+    direction: str, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
     """Move a stock or divider up or down in the sorting sequence of the watchlist."""
+    db_watchlist = crud.get_watchlist(db, watchlist_id, user_id=current_user.id)
+    if db_watchlist is None:
+        raise HTTPException(status_code=404, detail="Watchlist not found")
+        
     if direction not in ["up", "down"]:
         raise HTTPException(status_code=400, detail="Direction must be 'up' or 'down'")
     success = crud.move_watchlist_item(db=db, watchlist_id=watchlist_id, item_id=item_id, direction=direction)
@@ -249,9 +252,14 @@ def move_watchlist_item(watchlist_id: int, item_id: int, direction: str, db: Ses
     return {"message": f"Item moved {direction} successfully", "item_id": item_id, "direction": direction}
 
 @app.post("/api/watchlists/{watchlist_id}/reorder")
-def reorder_watchlist_items(watchlist_id: int, item_ids: List[int], db: Session = Depends(get_db)):
+def reorder_watchlist_items(
+    watchlist_id: int, 
+    item_ids: List[int], 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
     """Reorder multiple items in a watchlist simultaneously."""
-    db_watchlist = crud.get_watchlist(db, watchlist_id)
+    db_watchlist = crud.get_watchlist(db, watchlist_id, user_id=current_user.id)
     if not db_watchlist:
         raise HTTPException(status_code=404, detail="Watchlist not found")
         
@@ -264,8 +272,18 @@ def reorder_watchlist_items(watchlist_id: int, item_ids: List[int], db: Session 
     return {"message": "Reordered successfully", "item_ids": item_ids}
 
 @app.put("/api/watchlists/{watchlist_id}/items/{item_id}", response_model=schemas.WatchlistItem)
-def update_watchlist_item(watchlist_id: int, item_id: int, item_update: schemas.WatchlistItemUpdate, db: Session = Depends(get_db)):
+def update_watchlist_item(
+    watchlist_id: int, 
+    item_id: int, 
+    item_update: schemas.WatchlistItemUpdate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
     """Update a watchlist item (e.g., rename a section divider)."""
+    db_watchlist = crud.get_watchlist(db, watchlist_id, user_id=current_user.id)
+    if not db_watchlist:
+        raise HTTPException(status_code=404, detail="Watchlist not found")
+        
     db_item = db.query(models.WatchlistItem).filter(
         models.WatchlistItem.id == item_id,
         models.WatchlistItem.watchlist_id == watchlist_id
@@ -301,7 +319,11 @@ def update_watchlist_item(watchlist_id: int, item_id: int, item_update: schemas.
 # --- TRANSACTION & PORTFOLIO ENDPOINTS ---
 
 @app.post("/api/transactions", response_model=schemas.Transaction, status_code=status.HTTP_201_CREATED)
-def create_transaction(transaction: schemas.TransactionCreate, db: Session = Depends(get_db)):
+def create_transaction(
+    transaction: schemas.TransactionCreate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
     """Create a new transaction (BUY or SELL)."""
     if transaction.operation_type not in ["BUY", "SELL"]:
         raise HTTPException(status_code=400, detail="Operation type must be 'BUY' or 'SELL'")
@@ -314,15 +336,25 @@ def create_transaction(transaction: schemas.TransactionCreate, db: Session = Dep
     if transaction.exchange_rate <= 0:
         raise HTTPException(status_code=400, detail="Exchange rate must be greater than zero")
         
-    return crud.create_transaction(db=db, tx=transaction)
+    return crud.create_transaction(db=db, tx=transaction, user_id=current_user.id)
 
 @app.get("/api/transactions", response_model=List[schemas.Transaction])
-def read_transactions(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Get the log of transactions."""
-    return crud.get_transactions(db=db, skip=skip, limit=limit)
+def read_transactions(
+    skip: int = 0, 
+    limit: int = 100, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    """Get the log of transactions for logged in user."""
+    return crud.get_transactions(db=db, user_id=current_user.id, skip=skip, limit=limit)
 
 @app.put("/api/transactions/{transaction_id}", response_model=schemas.Transaction)
-def update_transaction(transaction_id: int, transaction: schemas.TransactionUpdate, db: Session = Depends(get_db)):
+def update_transaction(
+    transaction_id: int, 
+    transaction: schemas.TransactionUpdate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
     """Update an existing transaction."""
     if transaction.operation_type not in ["BUY", "SELL"]:
         raise HTTPException(status_code=400, detail="Operation type must be 'BUY' or 'SELL'")
@@ -335,35 +367,49 @@ def update_transaction(transaction_id: int, transaction: schemas.TransactionUpda
     if transaction.exchange_rate <= 0:
         raise HTTPException(status_code=400, detail="Exchange rate must be greater than zero")
         
-    db_tx = crud.update_transaction(db=db, tx_id=transaction_id, tx_update=transaction)
+    db_tx = crud.update_transaction(db=db, tx_id=transaction_id, tx_update=transaction, user_id=current_user.id)
     if not db_tx:
         raise HTTPException(status_code=404, detail="Transaction not found")
     return db_tx
 
 @app.delete("/api/transactions")
-def delete_all_transactions(db: Session = Depends(get_db)):
-    """Delete all transactions in the database."""
-    num_deleted = db.query(models.Transaction).delete()
+def delete_all_transactions(
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    """Delete all transactions belonging to current user."""
+    num_deleted = db.query(models.Transaction).filter(models.Transaction.user_id == current_user.id).delete()
     db.commit()
     return {"message": "All transactions deleted successfully", "count": num_deleted}
 
 @app.delete("/api/transactions/{transaction_id}")
-def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
+def delete_transaction(
+    transaction_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
     """Delete a transaction by ID."""
-    success = crud.delete_transaction(db=db, tx_id=transaction_id)
+    success = crud.delete_transaction(db=db, tx_id=transaction_id, user_id=current_user.id)
     if not success:
         raise HTTPException(status_code=404, detail="Transaction not found")
     return {"message": "Transaction deleted successfully", "id": transaction_id}
 
 @app.get("/api/portfolio", response_model=schemas.PortfolioResponse)
-def read_portfolio(db: Session = Depends(get_db)):
+def read_portfolio(
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
     """Get the consolidated portfolio with real-time stock prices from Yahoo Finance."""
-    return crud.get_portfolio(db=db)
+    return crud.get_portfolio(db=db, user_id=current_user.id)
 
 
 @app.post("/api/transactions/import")
-def import_transactions(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """Import transactions from an Excel file."""
+def import_transactions(
+    file: UploadFile = File(...), 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    """Import transactions from an Excel file for current user."""
     import pandas as pd
     from io import BytesIO
     
@@ -453,8 +499,9 @@ def import_transactions(file: UploadFile = File(...), db: Session = Depends(get_
             if pd.isnull(price) or price <= 0:
                 continue
                 
-            # Check duplicates (comparing date part)
+            # Check duplicates (comparing date part) for current user
             candidates = db.query(models.Transaction).filter(
+                models.Transaction.user_id == current_user.id,
                 models.Transaction.symbol == symbol,
                 models.Transaction.operation_type == op_type,
                 models.Transaction.quantity == quantity,
@@ -483,6 +530,7 @@ def import_transactions(file: UploadFile = File(...), db: Session = Depends(get_
             price_comparable = price * ratio * exchange_rate
             
             db_tx = models.Transaction(
+                user_id=current_user.id,
                 symbol=symbol,
                 operation_type=op_type,
                 quantity=quantity,
@@ -504,6 +552,7 @@ def import_transactions(file: UploadFile = File(...), db: Session = Depends(get_
         db.commit()
         
     return {"imported": imported_count, "skipped": skipped_count}
+
 
 
 

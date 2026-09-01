@@ -4,3 +4,11 @@ sqlalchemy
 requests
 pydantic
 python-multipart
+google-auth
+pyjwt
+python-dotenv
+psycopg2-binary
+beautifulsoup4
+pandas
+openpyxl
+
