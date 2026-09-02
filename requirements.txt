@@ -11,4 +11,5 @@ psycopg2-binary
 beautifulsoup4
 pandas
 openpyxl
-
+reportlab
+matplotlib

@@ -1,6 +1,6 @@
 import os
-from typing import List, Optional
-from fastapi import FastAPI, Depends, HTTPException, Query, status, UploadFile, File
+from typing import List, Optional, Dict, Any
+from fastapi import FastAPI, Depends, HTTPException, Query, status, UploadFile, File, Response, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -431,6 +431,74 @@ def read_portfolio(
 ):
     """Get the consolidated portfolio with real-time stock prices from Yahoo Finance."""
     return crud.get_portfolio(db=db, user_id=current_user.id)
+
+
+def get_optional_user(
+    credentials: Optional[Any] = Depends(auth_router.routes[0].endpoint if False else None),
+    db: Session = Depends(get_db)
+):
+    return None
+
+
+@app.post("/api/portfolio/factsheet-pdf")
+def download_portfolio_factsheet_pdf(
+    payload: Optional[Dict[str, Any]] = Body(None),
+    db: Session = Depends(get_db)
+):
+    """Generate and download an institutional 2-page PDF Factsheet for the portfolio."""
+    from .factsheet_generator import build_factsheet_pdf
+
+    # Check if client sent full portfolio payload (guest mode or preloaded state)
+    if payload and ("items" in payload or "transactions" in payload):
+        p_items = payload.get("items", [])
+        txs = payload.get("transactions", [])
+        p_data = {
+            "items": p_items,
+            "realized_pnl": payload.get("realized_pnl", 0.0),
+            "realized_pnl_percent": payload.get("realized_pnl_percent", 0.0),
+            "metrics": payload.get("metrics", {}),
+            "closed_trades": payload.get("closed_trades", []),
+            "tir": payload.get("tir")
+        }
+    else:
+        # Fallback to database
+        p_data = crud.get_portfolio(db=db, user_id=None)
+        txs = db.query(models.Transaction).order_by(models.Transaction.date.asc(), models.Transaction.id.asc()).all()
+
+    try:
+        pdf_bytes = build_factsheet_pdf(portfolio_data=p_data, transactions=txs)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": "attachment; filename=Factsheet_Cartera_Renta_Variable.pdf"
+            }
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error generando el factsheet: {str(e)}")
+
+
+@app.get("/api/portfolio/factsheet-pdf")
+def get_portfolio_factsheet_pdf(db: Session = Depends(get_db)):
+    """GET endpoint for direct browser download of the factsheet PDF."""
+    from .factsheet_generator import build_factsheet_pdf
+    p_data = crud.get_portfolio(db=db, user_id=None)
+    txs = db.query(models.Transaction).order_by(models.Transaction.date.asc(), models.Transaction.id.asc()).all()
+    try:
+        pdf_bytes = build_factsheet_pdf(portfolio_data=p_data, transactions=txs)
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": "attachment; filename=Factsheet_Cartera_Renta_Variable.pdf"
+            }
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error generando el factsheet: {str(e)}")
 
 
 @app.post("/api/transactions/import")

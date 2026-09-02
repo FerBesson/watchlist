@@ -56,6 +56,7 @@ document.addEventListener('alpine:init', () => {
         isImporting: false,
         showImportModal: false,
         showTxHelpModal: false,
+        isDownloadingFactsheet: false,
         // Inline Creation State
         isCreatingWatchlist: false,
         newWatchlistInputName: '',
@@ -696,6 +697,66 @@ document.addEventListener('alpine:init', () => {
                 }
             } catch (error) {
                 console.error('Error fetching portfolio:', error);
+            }
+        },
+
+        // Descargar Factsheet Institucional de Cartera en PDF
+        async downloadFactsheetPdf() {
+            if (this.isDownloadingFactsheet) return;
+
+            if (!this.portfolioItems || this.portfolioItems.length === 0) {
+                alert('La cartera no contiene activos registrados para generar el factsheet.');
+                return;
+            }
+
+            this.isDownloadingFactsheet = true;
+
+            try {
+                const payload = {
+                    items: this.portfolioItems,
+                    transactions: this.transactions,
+                    realized_pnl: this.portfolioRealizedPnL,
+                    realized_pnl_percent: this.portfolioRealizedPnLPercent,
+                    metrics: this.portfolioMetrics,
+                    closed_trades: this.closedTrades,
+                    tir: this.portfolioTIR
+                };
+
+                let response;
+                if (this.isGuest) {
+                    response = await fetch('/api/portfolio/factsheet-pdf', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                } else {
+                    response = await this.authFetch('/api/portfolio/factsheet-pdf', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                }
+
+                if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(`Error ${response.status}: ${errText || 'Error en el servidor'}`);
+                }
+
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                const nowStr = new Date().toISOString().split('T')[0];
+                a.download = `Factsheet_Cartera_Renta_Variable_${nowStr}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('Error downloading factsheet:', error);
+                alert('Ocurrió un error al generar el factsheet PDF: ' + (error.message || error));
+            } finally {
+                this.isDownloadingFactsheet = false;
             }
         },
 
