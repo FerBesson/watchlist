@@ -1,6 +1,10 @@
+import os
 import time
 import re
+import json
+import threading
 import requests
+from requests.adapters import HTTPAdapter
 import datetime
 from concurrent.futures import ThreadPoolExecutor
 from bs4 import BeautifulSoup
@@ -8,6 +12,7 @@ from typing import List, Dict, Any, Optional
 
 BASE_URL = "https://query2.finance.yahoo.com"
 FALLBACK_BASE_URL = "https://query1.finance.yahoo.com"
+SESSION_CACHE_FILE = os.path.join(os.path.dirname(__file__), ".session_cache.json")
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
@@ -19,12 +24,60 @@ class YahooFinanceClient:
         self.session = None
         self.crumb = None
         self.last_session_time = 0
-        self.session_expiry = 1800  # Refresh session after 30 min
-        self.failed_cooldown = 300  # Don't hammer crumb endpoint if failed, wait 5 min
+        self.session_expiry = 43200  # Reutilizar sesión y crumb hasta por 12 horas
+        self.failed_cooldown = 120   # Tiempo de espera si la obtención de crumb falló
+        self._session_lock = threading.Lock()
         
         # In-memory quote cache to prevent spamming on rapid polling (TTL: 45 seconds)
         self._cache = {}
         self._cache_ttl = 45
+
+    def _create_base_session(self) -> requests.Session:
+        """Crea una sesión HTTP con Connection Pooling (Keep-Alive) para reutilizar sockets."""
+        s = requests.Session()
+        s.headers.update(HEADERS)
+        adapter = HTTPAdapter(pool_connections=25, pool_maxsize=25, max_retries=1)
+        s.mount("https://", adapter)
+        s.mount("http://", adapter)
+        return s
+
+    def _load_cached_session(self, now: float) -> bool:
+        """Carga la sesión (cookies + crumb) guardada en disco para inicialización instantánea (0 ms)."""
+        if not os.path.exists(SESSION_CACHE_FILE):
+            return False
+        try:
+            with open(SESSION_CACHE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            saved_at = data.get("saved_at", 0)
+            crumb = data.get("crumb")
+            cookies = data.get("cookies", {})
+            if crumb and (now - saved_at < self.session_expiry):
+                s = self._create_base_session()
+                s.cookies.update(requests.utils.cookiejar_from_dict(cookies))
+                s.params = {"crumb": crumb}
+                self.session = s
+                self.crumb = crumb
+                self.last_session_time = saved_at
+                print(f"[YahooFinance] Sesión y crumb restaurados desde caché persistente.")
+                return True
+        except Exception as e:
+            print(f"[YahooFinance] Error leyendo caché de sesión: {e}")
+        return False
+
+    def _save_cached_session(self, now: float):
+        """Persiste la sesión en disco para que persista entre reinicios del servidor."""
+        if not self.session or not self.crumb:
+            return
+        try:
+            data = {
+                "crumb": self.crumb,
+                "cookies": requests.utils.dict_from_cookiejar(self.session.cookies),
+                "saved_at": now
+            }
+            with open(SESSION_CACHE_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+        except Exception as e:
+            print(f"[YahooFinance] Error guardando caché de sesión: {e}")
 
     def warmup(self):
         """Pre-warms the session in background so initial requests are instant."""
@@ -33,53 +86,65 @@ class YahooFinanceClient:
         except Exception:
             pass
 
-    def _init_session(self):
-        """Creates a requests session and retrieves the cookie + crumb from Yahoo Finance."""
+    def _init_session(self, force: bool = False):
+        """
+        Inicializa o reutiliza la sesión HTTP con cookie y crumb.
+        Es seguro para concurrencia (thread-safe) y almacena en caché en disco.
+        """
         now = time.time()
-        # If we have a valid session and not expired, skip
-        if self.session and self.crumb and (now - self.last_session_time < self.session_expiry):
+        # Verificación rápida en memoria antes de bloquear el lock
+        if not force and self.session and self.crumb and (now - self.last_session_time < self.session_expiry):
             return
 
-        # If it failed recently, don't spam getcrumb on every single request
-        if not self.crumb and (now - self.last_session_time < self.failed_cooldown):
+        if not force and not self.crumb and (now - self.last_session_time < self.failed_cooldown):
             return
 
-        self.last_session_time = now
-        try:
-            s = requests.Session()
-            s.headers.update(HEADERS)
-            # Step 1: Fetch cookie
-            s.get("https://fc.yahoo.com", timeout=8)
-            # Step 2: Fetch crumb from query2
-            crumb_resp = s.get(f"{BASE_URL}/v1/test/getcrumb", timeout=8)
-            if crumb_resp.status_code != 200:
-                # Try fallback query1
-                crumb_resp = s.get(f"{FALLBACK_BASE_URL}/v1/test/getcrumb", timeout=8)
+        with self._session_lock:
+            # Doble verificación dentro del lock
+            if not force and self.session and self.crumb and (now - self.last_session_time < self.session_expiry):
+                return
 
-            crumb_resp.raise_for_status()
-            crumb_text = crumb_resp.text.strip()
-            if crumb_text and not "<html" in crumb_text.lower():
-                self.crumb = crumb_text
-                s.params = {"crumb": self.crumb}
-                self.session = s
-                print(f"[YahooFinance] Session initialized successfully with crumb.")
-            else:
+            # Intentar cargar desde el caché en disco si no se fuerza la renovación
+            if not force and self._load_cached_session(now):
+                return
+
+            self.last_session_time = now
+            try:
+                s = self._create_base_session()
+                # Paso 1: Obtener cookie de sesión de Yahoo
+                s.get("https://fc.yahoo.com", timeout=8)
+                # Paso 2: Obtener crumb desde query2
+                crumb_resp = s.get(f"{BASE_URL}/v1/test/getcrumb", timeout=8)
+                if crumb_resp.status_code != 200:
+                    # Intentar en fallback query1
+                    crumb_resp = s.get(f"{FALLBACK_BASE_URL}/v1/test/getcrumb", timeout=8)
+
+                crumb_resp.raise_for_status()
+                crumb_text = crumb_resp.text.strip()
+                if crumb_text and "<html" not in crumb_text.lower():
+                    self.crumb = crumb_text
+                    s.params = {"crumb": self.crumb}
+                    self.session = s
+                    self._save_cached_session(now)
+                    print(f"[YahooFinance] Nueva sesión inicializada con crumb exitosamente.")
+                else:
+                    self.crumb = None
+                    self.session = s
+            except Exception as e:
+                print(f"[YahooFinance] Fallo al negociar nuevo crumb: {e}")
+                self.session = self._create_base_session()
                 self.crumb = None
-                self.session = s
-        except Exception as e:
-            # Silent fallback without breaking app
-            self.session = requests.Session()
-            self.session.headers.update(HEADERS)
-            self.crumb = None
 
     def search_symbols(self, query: str) -> List[Dict[str, Any]]:
-        """Search for symbols on Yahoo Finance."""
+        """Search for symbols on Yahoo Finance using persistent session."""
+        self._init_session()
+        client = self.session or requests
         url = f"{BASE_URL}/v1/finance/search"
         params = {"q": query, "quotesCount": 10, "newsCount": 0}
         try:
-            resp = requests.get(url, params=params, headers=HEADERS, timeout=8)
+            resp = client.get(url, params=params, timeout=8)
             if resp.status_code != 200:
-                resp = requests.get(f"{FALLBACK_BASE_URL}/v1/finance/search", params=params, headers=HEADERS, timeout=8)
+                resp = client.get(f"{FALLBACK_BASE_URL}/v1/finance/search", params=params, timeout=8)
             resp.raise_for_status()
             data = resp.json()
             results = []
@@ -155,10 +220,11 @@ class YahooFinanceClient:
         return metadata
 
     def _fetch_single_chart_quote(self, sym_upper: str) -> tuple:
-        """Fetch single quote via the robust /v8/finance/chart endpoint."""
+        """Fetch single quote via the robust /v8/finance/chart endpoint reusing session."""
         try:
+            client = self.session or requests
             url = f"{BASE_URL}/v8/finance/chart/{sym_upper}"
-            resp = requests.get(url, params={"range": "1d", "interval": "1d"}, headers=HEADERS, timeout=6)
+            resp = client.get(url, params={"range": "1d", "interval": "1d"}, timeout=6)
             if resp.status_code == 200:
                 data = resp.json()
                 meta = data.get("chart", {}).get("result", [{}])[0].get("meta", {})
@@ -185,40 +251,28 @@ class YahooFinanceClient:
             pass
         return sym_upper, None
 
-    def get_quotes(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:
-        """Fetch real-time quotes for multiple symbols with caching and parallel fallback."""
-        if not symbols:
-            return {}
+    def _fetch_batch_chunk(self, chunk: List[str], quotes_dict: Dict[str, Any], now: float) -> bool:
+        """Fetch a batch of symbols via /v7/finance/quote with automatic host fallback."""
+        if not self.crumb or not self.session:
+            return False
 
-        now = time.time()
-        symbols_upper = [s.strip().upper() for s in symbols if s.strip()]
-        quotes_dict = {}
-        missing_symbols = []
+        symbols_str = ",".join(chunk)
+        params = {"symbols": symbols_str, "crumb": self.crumb}
 
-        # Check in-memory cache
-        for sym in symbols_upper:
-            if sym in self._cache and (now - self._cache[sym]["_cached_at"] < self._cache_ttl):
-                quotes_dict[sym] = self._cache[sym]
-            else:
-                missing_symbols.append(sym)
-
-        if not missing_symbols:
-            return quotes_dict
-
-        self._init_session()
-
-        # 1. Try batch quotes using /v7/finance/quote if crumb is available
-        if self.crumb and self.session:
+        for base in [BASE_URL, FALLBACK_BASE_URL]:
             try:
-                symbols_str = ",".join(missing_symbols)
-                url = f"{BASE_URL}/v7/finance/quote"
-                resp = self.session.get(url, params={"symbols": symbols_str, "crumb": self.crumb}, timeout=8)
+                url = f"{base}/v7/finance/quote"
+                resp = self.session.get(url, params=params, timeout=8)
+                if resp.status_code in (401, 403):
+                    # Crumb expired or rejected
+                    return False
                 if resp.status_code == 200:
                     data = resp.json()
                     results = data.get("quoteResponse", {}).get("result", [])
                     for q in results:
                         sym = q.get("symbol", "").upper()
                         quote_obj = {
+                            "name": q.get("shortName") or q.get("longName") or sym,
                             "price": q.get("regularMarketPrice"),
                             "prev_close": q.get("regularMarketPreviousClose"),
                             "change": q.get("regularMarketChange"),
@@ -231,13 +285,52 @@ class YahooFinanceClient:
                         }
                         quotes_dict[sym] = quote_obj
                         self._cache[sym] = quote_obj
-                    
-                    # Update missing list
-                    missing_symbols = [s for s in missing_symbols if s not in quotes_dict]
+                    return True
             except Exception:
-                pass
+                continue
+        return False
 
-        # 2. Parallel fallback using ThreadPoolExecutor on /v8/finance/chart
+    def get_quotes(self, symbols: List[str]) -> Dict[str, Dict[str, Any]]:
+        """
+        Fetch real-time quotes for multiple symbols using optimized batch requests,
+        in-memory TTL caching, automatic crumb renewal, and parallel fallback.
+        """
+        if not symbols:
+            return {}
+
+        now = time.time()
+        symbols_upper = [s.strip().upper() for s in symbols if s.strip()]
+        quotes_dict = {}
+        missing_symbols = []
+
+        # 1. Check in-memory cache
+        for sym in symbols_upper:
+            if sym in self._cache and (now - self._cache[sym]["_cached_at"] < self._cache_ttl):
+                quotes_dict[sym] = self._cache[sym]
+            else:
+                missing_symbols.append(sym)
+
+        if not missing_symbols:
+            return quotes_dict
+
+        self._init_session()
+
+        # 2. Batch requests in chunks of 40 symbols (avoids URL length limits & timeouts)
+        BATCH_SIZE = 40
+        chunks = [missing_symbols[i:i + BATCH_SIZE] for i in range(0, len(missing_symbols), BATCH_SIZE)]
+
+        for chunk in chunks:
+            success = self._fetch_batch_chunk(chunk, quotes_dict, now)
+            if not success:
+                # If session/crumb expired or failed, force re-initialization and retry chunk
+                self._init_session(force=True)
+                if self.crumb and self.session:
+                    self._fetch_batch_chunk(chunk, quotes_dict, now)
+
+        # 3. Update missing symbols list
+        missing_symbols = [s for s in missing_symbols if s not in quotes_dict]
+
+        # 4. Parallel fallback using ThreadPoolExecutor on /v8/finance/chart for any remaining symbols
         if missing_symbols:
             with ThreadPoolExecutor(max_workers=min(12, len(missing_symbols))) as executor:
                 results = executor.map(self._fetch_single_chart_quote, missing_symbols)
@@ -250,7 +343,9 @@ class YahooFinanceClient:
         return quotes_dict
 
     def get_historical_data(self, symbol: str, time_range: str = "1mo", interval: str = "1d") -> List[Dict[str, Any]]:
-        """Fetch historical chart data for drawing charts."""
+        """Fetch historical chart data for drawing charts reusing session."""
+        self._init_session()
+        client = self.session or requests
         if time_range == "1d":
             interval = "5m"
         elif time_range == "5d":
@@ -260,9 +355,9 @@ class YahooFinanceClient:
         params = {"range": time_range, "interval": interval}
         
         try:
-            resp = requests.get(url, params=params, headers=HEADERS, timeout=8)
+            resp = client.get(url, params=params, timeout=8)
             if resp.status_code != 200:
-                resp = requests.get(f"{FALLBACK_BASE_URL}/v8/finance/chart/{symbol.upper()}", params=params, headers=HEADERS, timeout=8)
+                resp = client.get(f"{FALLBACK_BASE_URL}/v8/finance/chart/{symbol.upper()}", params=params, timeout=8)
             resp.raise_for_status()
             data = resp.json()
             

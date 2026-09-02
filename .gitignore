@@ -47,4 +47,5 @@ backups/
 *.swo
 .DS_Store
 Thumbs.db
+.session_cache.json
 
