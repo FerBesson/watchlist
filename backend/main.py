@@ -657,6 +657,21 @@ static_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+@app.get("/favicon.ico")
+def favicon():
+    fav_file = os.path.join(static_dir, "img", "favicon.ico")
+    if os.path.exists(fav_file):
+        return FileResponse(fav_file, media_type="image/x-icon")
+    raise HTTPException(status_code=404)
+
+@app.get("/apple-touch-icon.png")
+@app.get("/apple-touch-icon-precomposed.png")
+def apple_touch_icon():
+    icon_file = os.path.join(static_dir, "img", "apple-touch-icon.png")
+    if os.path.exists(icon_file):
+        return FileResponse(icon_file, media_type="image/png")
+    raise HTTPException(status_code=404)
+
 @app.get("/")
 def read_root():
     """Serve the index.html at root."""

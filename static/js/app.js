@@ -1743,7 +1743,7 @@ document.addEventListener('alpine:init', () => {
             if (this.selectedStock && this.selectedStock.change_percent !== null) {
                 if (this.selectedStock.change_percent > 0) {
                     themeColor = '#00ff66'; // Neon Green
-                    glowColor = 'rgba(0, 255, 102, 0.15)';
+                    glowColor = 'rgba(0, 255, 102, 0.2)';
                 } else if (this.selectedStock.change_percent < 0) {
                     themeColor = '#ff3b30'; // Neon Red
                     glowColor = 'rgba(255, 59, 48, 0.15)';
@@ -1753,7 +1753,7 @@ document.addEventListener('alpine:init', () => {
             // Create gradient
             const gradient = ctx.getContext('2d').createLinearGradient(0, 0, 0, 300);
             gradient.addColorStop(0, glowColor);
-            gradient.addColorStop(1, 'rgba(13, 18, 28, 0)');
+            gradient.addColorStop(1, 'rgba(18, 18, 18, 0)');
 
             this.chartInstance = new Chart(ctx, {
                 type: 'line',
@@ -1780,9 +1780,9 @@ document.addEventListener('alpine:init', () => {
                         legend: { display: false },
                         tooltip: {
                             enabled: true,
-                            backgroundColor: '#0d121c',
-                            titleColor: '#64748b',
-                            bodyColor: '#cbd5e1',
+                            backgroundColor: '#121214',
+                            titleColor: '#737373',
+                            bodyColor: '#e5e5e5',
                             borderColor: themeColor,
                             borderWidth: 1,
                             titleFont: { family: 'Fira Code', size: 11 },
@@ -1797,22 +1797,22 @@ document.addEventListener('alpine:init', () => {
                     scales: {
                         x: {
                             grid: {
-                                color: '#1e293b',
+                                color: '#262626',
                                 drawTicks: false
                             },
                             ticks: {
-                                color: '#64748b',
+                                color: '#737373',
                                 font: { family: 'Fira Code', size: 9 },
                                 maxTicksLimit: 8
                             }
                         },
                         y: {
                             grid: {
-                                color: '#1e293b',
+                                color: '#262626',
                                 drawTicks: false
                             },
                             ticks: {
-                                color: '#64748b',
+                                color: '#737373',
                                 font: { family: 'Fira Code', size: 9 },
                                 callback: function(value) {
                                     return '$' + value.toFixed(2);
@@ -1897,7 +1897,7 @@ document.addEventListener('alpine:init', () => {
                 stroke: {
                     show: true,
                     width: 1.5,
-                    colors: ['#0d121c'] // Match card background
+                    colors: ['#121214'] // Match card background
                 },
                 title: {
                     show: false
@@ -1930,22 +1930,22 @@ document.addEventListener('alpine:init', () => {
                         const valStr = point.y.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                         
                         let pnlText = '0.00%';
-                        let pnlClass = 'text-slate-400';
+                        let pnlClass = 'text-neutral-400';
                         if (point.rawSymbol !== 'CASH' && point.pnl !== null) {
                             const sign = point.pnl >= 0 ? '+' : '';
                             pnlText = `${sign}${point.pnl.toFixed(2)}%`;
                             pnlClass = point.pnl >= 0 ? 'text-[#00ff66]' : 'text-[#ff3b30]';
                         } else if (point.rawSymbol === 'CASH') {
                             pnlText = 'Neutral';
-                            pnlClass = 'text-slate-400';
+                            pnlClass = 'text-neutral-400';
                         }
                         
                         return `
-                            <div class="p-3 bg-[#0d121c] border border-slate-800 font-mono text-[11px] text-left" style="border-radius: 4px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.5);">
+                            <div class="p-3 bg-[#121214] border border-neutral-800 font-mono text-[11px] text-left" style="border-radius: 4px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.5);">
                                 <div class="font-bold text-[#00f0ff] mb-1.5">&gt; ${point.rawSymbol}</div>
-                                <div class="mb-1 text-slate-300">Valor: <span class="text-slate-100 font-bold">$${valStr}</span></div>
-                                <div class="mb-1 text-slate-300">Rendimiento: <span class="${pnlClass} font-bold">${pnlText}</span></div>
-                                <div class="text-slate-400 text-[10px]">Nominal: ${point.qty.toLocaleString()}</div>
+                                <div class="mb-1 text-neutral-300">Valor: <span class="text-white font-bold">$${valStr}</span></div>
+                                <div class="mb-1 text-neutral-300">Rendimiento: <span class="${pnlClass} font-bold">${pnlText}</span></div>
+                                <div class="text-neutral-400 text-[10px]">Nominal: ${point.qty.toLocaleString()}</div>
                             </div>
                         `;
                     }
@@ -2028,7 +2028,7 @@ document.addEventListener('alpine:init', () => {
         getLogoUrl(symbol) {
             if (!symbol) return '';
             if (symbol.toUpperCase() === 'CASH') {
-                return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%2300ff66" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>';
+                return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="%23d92672" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="2" x2="12" y2="22"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>';
             }
             let clean = symbol.toUpperCase().split('.')[0].split('-')[0]; // e.g. BTC-USD -> BTC, AAPL.BA -> AAPL
             return `https://assets.parqet.com/logos/symbol/${clean}`;

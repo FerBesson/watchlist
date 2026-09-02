@@ -4,13 +4,18 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NEBULA Stock Tracker</title>
-  <!-- Favicon -->
-  <link rel="icon" type="image/png" href="/static/img/nebula_terminal_icon_transparent_4K-removebg-preview.png">
-  <link rel="apple-touch-icon" href="/static/img/nebula_terminal_icon_transparent_4K-removebg-preview.png">
+  <!-- Favicon and App / Bookmark Icons -->
+  <link rel="shortcut icon" href="/favicon.ico?v=2">
+  <link rel="icon" type="image/x-icon" href="/favicon.ico?v=2">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/img/favicon-32x32.png?v=2">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/img/favicon-16x16.png?v=2">
+  <link rel="icon" type="image/png" sizes="192x192" href="/static/img/favicon-192x192.png?v=2">
+  <link rel="icon" type="image/png" sizes="512x512" href="/static/img/favicon-512x512.png?v=2">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/img/apple-touch-icon.png?v=2">
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Custom CSS for terminal aesthetic -->
-  <link rel="stylesheet" href="/static/css/style.css?v=2.0">
+  <link rel="stylesheet" href="/static/css/style.css?v=3.2">
   <!-- SortableJS CDN for Drag and Drop -->
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
   <!-- Chart.js CDN -->
@@ -20,7 +25,7 @@
   <!-- Google Identity Services -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <!-- Custom JS Application -->
-  <script defer src="/static/js/app.js?v=4.4"></script>
+  <script defer src="/static/js/app.js?v=4.7"></script>
   <!-- Alpine.js CDN -->
   <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
 </head>
@@ -30,39 +35,39 @@
   <div class="crt-overlay"></div>
 
   <!-- LOGIN OVERLAY / MODAL -->
-  <div x-show="(!isLoggedIn && !isGuest && !authChecking) || showLoginModal" x-cloak class="fixed inset-0 z-50 bg-[#070b12]/95 backdrop-blur-md flex items-center justify-center p-4 font-mono">
-    <div class="border border-[#00ff66]/70 bg-[#0d121c] p-6 md:p-8 max-w-lg w-full shadow-2xl shadow-[#00ff66]/10 text-center relative rounded-lg">
+  <div x-show="(!isLoggedIn && !isGuest && !authChecking) || showLoginModal" x-cloak class="fixed inset-0 z-50 bg-[#080808]/95 backdrop-blur-md flex items-center justify-center p-4 font-mono">
+    <div class="border border-[#d92672]/70 bg-[#121212] p-6 md:p-8 max-w-lg w-full shadow-2xl shadow-[#d92672]/10 text-center relative rounded-lg">
       
       <!-- Close button if already in guest mode -->
       <button 
         x-show="isGuest" 
         @click="closeLoginModal()" 
-        class="absolute top-3 right-3 text-slate-500 hover:text-red-400 font-bold text-lg p-1 transition"
+        class="absolute top-3 right-3 text-neutral-500 hover:text-red-400 font-bold text-lg p-1 transition"
         title="Cerrar ventana"
       >✕</button>
 
-      <div class="relative flex items-center justify-center mb-4">
-        <div class="absolute w-28 h-28 rounded-full bg-gradient-to-r from-pink-500/25 via-fuchsia-500/30 to-purple-600/20 blur-xl pointer-events-none"></div>
-        <img src="/static/img/nebula_terminal_icon_transparent_4K-removebg-preview.png" alt="Nebula Terminal Icon" class="w-24 h-24 object-contain relative z-10 nebula-icon-glow-lg transition-transform duration-300 hover:scale-105">
+      <div class="relative flex items-center justify-center mb-3">
+        <div class="absolute w-20 h-20 rounded-full bg-gradient-to-r from-pink-600/15 via-fuchsia-700/15 to-purple-800/10 blur-lg pointer-events-none"></div>
+        <img src="/static/img/favicon-512x512.png" alt="Nebula Terminal Icon" class="w-16 h-16 object-contain relative z-10 nebula-icon-glow transition-transform duration-200 hover:scale-105">
       </div>
-      <h2 class="text-base md:text-lg font-bold text-[#00ff66] glow-green uppercase mb-2 tracking-wider">NEBULA STOCK TRACKER</h2>
+      <h2 class="text-base md:text-lg font-bold text-[#d92672] glow-magenta uppercase mb-2">NEBULA STOCK TRACKER</h2>
       
       <!-- Value Proposition / Benefits of Logging In -->
-      <div class="bg-[#141c2b]/90 border border-slate-700/70 rounded p-3.5 mb-5 text-left text-xs">
-        <p class="text-slate-200 font-semibold mb-2 text-center text-[13px] text-[#00f0ff]">
+      <div class="bg-[#1a1a1a]/90 border border-neutral-700/70 rounded p-3.5 mb-5 text-left text-xs">
+        <p class="text-neutral-200 font-semibold mb-2 text-center text-[13px] text-[#00f0ff]">
           ⭐ Inicia sesión con tu cuenta de Google para guardar tus listas de seguimiento y cartera de inversión:
         </p>
-        <ul class="space-y-1.5 text-slate-300 text-[11px] leading-relaxed">
+        <ul class="space-y-1.5 text-neutral-300 text-[11px] leading-relaxed">
           <li class="flex items-start gap-2">
-            <span class="text-[#00ff66] font-bold">✓</span>
+            <span class="text-[#d92672] font-bold">✓</span>
             <span><strong class="text-white">Sincronización en la nube:</strong> Accede a tus datos y listas desde cualquier dispositivo.</span>
           </li>
           <li class="flex items-start gap-2">
-            <span class="text-[#00ff66] font-bold">✓</span>
+            <span class="text-[#d92672] font-bold">✓</span>
             <span><strong class="text-white">Cartera &amp; Rendimiento:</strong> Guarda tu historial de transacciones, cálculo de PPC, TIR y métricas.</span>
           </li>
           <li class="flex items-start gap-2">
-            <span class="text-[#00ff66] font-bold">✓</span>
+            <span class="text-[#d92672] font-bold">✓</span>
             <span><strong class="text-white">Personalización permanente:</strong> Guarda múltiples listas, divisores y columnas elegidas.</span>
           </li>
         </ul>
@@ -75,22 +80,22 @@
 
       <!-- Divider -->
       <div class="flex items-center my-4">
-        <div class="flex-grow border-t border-slate-800"></div>
-        <span class="px-3 text-[11px] text-slate-500 uppercase tracking-widest font-bold">o bien</span>
-        <div class="flex-grow border-t border-slate-800"></div>
+        <div class="flex-grow border-t border-neutral-800"></div>
+        <span class="px-3 text-[11px] text-neutral-500 uppercase tracking-widest font-bold">o bien</span>
+        <div class="flex-grow border-t border-neutral-800"></div>
       </div>
 
       <!-- Guest Entry Option -->
       <div class="flex flex-col items-center">
         <button 
           @click="enterAsGuest()" 
-          class="w-full py-2.5 px-4 rounded border border-amber-500/60 bg-[#141c2b] hover:bg-amber-950/30 hover:border-amber-400 text-amber-300 hover:text-amber-200 font-mono text-xs font-bold transition flex items-center justify-center gap-2 group shadow-sm"
+          class="w-full py-2.5 px-4 rounded border border-amber-500/60 bg-[#1a1a1a] hover:bg-amber-950/30 hover:border-amber-400 text-amber-300 hover:text-amber-200 font-mono text-xs font-bold transition flex items-center justify-center gap-2 group shadow-sm"
         >
           <span class="text-amber-400 group-hover:translate-x-0.5 transition-transform">&gt;</span>
           <span>INGRESAR COMO INVITADO</span>
         </button>
-        <p class="text-[11px] text-slate-500 mt-2 font-mono leading-tight">
-          Explora la terminal sin registrarte. <span class="text-slate-400">Los cambios que realices no se guardarán al salir.</span>
+        <p class="text-[11px] text-neutral-500 mt-2 font-mono leading-tight">
+          Explora la terminal sin registrarte. <span class="text-neutral-400">Los cambios que realices no se guardarán al salir.</span>
         </p>
       </div>
 
@@ -102,29 +107,33 @@
   </div>
 
   <!-- MAIN HEADER -->
-  <header class="border border-slate-800 bg-[#0d121c] p-4 mb-4 flex flex-col md:flex-row justify-between items-center gap-4">
-    <div class="flex items-center gap-3.5">
+  <header class="border border-neutral-800 bg-[#121212] p-4 mb-4 flex flex-col md:flex-row justify-between items-center gap-4">
+    <div class="flex items-center gap-3">
       <div class="relative flex items-center justify-center flex-shrink-0">
-        <div class="absolute w-12 h-12 rounded-full bg-gradient-to-r from-pink-500/25 via-fuchsia-500/30 to-purple-600/20 blur-md pointer-events-none"></div>
-        <img src="/static/img/nebula_terminal_icon_transparent_4K-removebg-preview.png" alt="Nebula Terminal" class="w-10 h-10 md:w-11 md:h-11 object-contain relative z-10 nebula-icon-glow transition-transform duration-200 hover:scale-105">
+        <div class="absolute w-12 h-12 rounded-full bg-gradient-to-r from-pink-600/20 via-fuchsia-700/20 to-purple-800/15 blur-md pointer-events-none"></div>
+        <img src="/static/img/favicon-512x512.png" alt="Nebula Terminal" class="w-10 h-10 md:w-11 md:h-11 object-contain relative z-10 nebula-icon-glow transition-transform duration-200 hover:scale-105">
       </div>
-      <span class="text-[#00ff66] font-bold text-xl glow-green tracking-wide">NEBULA STOCK TRACKER</span>
-      <span class="hidden md:inline text-slate-600">|</span>
       <template x-if="isLoggedIn && currentUser">
-        <span class="text-xs text-[#00f0ff] font-mono" x-text="currentUser.email"></span>
+        <div class="flex items-center gap-2">
+          <span class="hidden md:inline text-neutral-600">|</span>
+          <span class="text-xs text-[#00f0ff] font-mono" x-text="currentUser.email"></span>
+        </div>
       </template>
       <template x-if="!isLoggedIn && isGuest">
-        <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-amber-500/70 bg-amber-950/50 text-amber-300 flex items-center gap-1.5 shadow-sm">
-          <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
-          MODO INVITADO
-        </span>
+        <div class="flex items-center gap-2">
+          <span class="hidden md:inline text-neutral-600">|</span>
+          <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-amber-500/70 bg-amber-950/50 text-amber-300 flex items-center gap-1.5 shadow-sm">
+            <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span>
+            MODO INVITADO
+          </span>
+        </div>
       </template>
     </div>
     
-    <div class="flex flex-wrap items-center gap-4 text-xs font-mono text-slate-400">
+    <div class="flex flex-wrap items-center gap-4 text-xs font-mono text-neutral-400">
       <div class="flex items-center gap-1.5">
-        <span class="w-2.5 h-2.5 rounded-full bg-[#00ff66] animate-pulse"></span>
-        <span class="text-[#00ff66]">SISTEMA: ONLINE</span>
+        <span class="w-2.5 h-2.5 rounded-full bg-[#d92672] animate-pulse"></span>
+        <span class="text-[#d92672]">SISTEMA: ONLINE</span>
       </div>
       <div>
         <span>ACTUALIZADO: </span>
@@ -135,7 +144,7 @@
       <template x-if="!isLoggedIn && isGuest">
         <button 
           @click="openLoginModal()" 
-          class="flex items-center gap-1.5 border border-[#00ff66]/50 bg-[#141c2b] hover:bg-[#00ff66]/10 text-[#00ff66] px-2.5 py-1 rounded font-bold transition glow-green"
+          class="flex items-center gap-1.5 border border-[#d92672]/50 bg-[#1a1a1a] hover:bg-[#d92672]/10 text-[#d92672] px-2.5 py-1 rounded font-bold transition glow-magenta"
           title="Guardar tus listas y sincronizar en la nube"
         >
           <span>🔑 INICIAR SESIÓN CON GOOGLE</span>
@@ -144,12 +153,12 @@
 
       <!-- User Profile Badge & Logout -->
       <template x-if="isLoggedIn && currentUser">
-        <div class="flex items-center gap-2 border border-slate-700 bg-[#141c2b] px-2.5 py-1 rounded">
+        <div class="flex items-center gap-2 border border-neutral-700 bg-[#1a1a1a] px-2.5 py-1 rounded">
           <template x-if="currentUser.picture">
-            <img :src="currentUser.picture" alt="" class="w-4 h-4 rounded-full border border-[#00ff66]">
+            <img :src="currentUser.picture" alt="" class="w-4 h-4 rounded-full border border-[#d92672]">
           </template>
-          <span class="text-slate-200 font-bold text-xs" x-text="currentUser.name || currentUser.email"></span>
-          <button @click="logout()" title="Cerrar sesión" class="text-rose-400 hover:text-rose-300 ml-1 border-l border-slate-700 pl-2 hover:underline font-bold">
+          <span class="text-neutral-200 font-bold text-xs" x-text="currentUser.name || currentUser.email"></span>
+          <button @click="logout()" title="Cerrar sesión" class="text-rose-400 hover:text-rose-300 ml-1 border-l border-neutral-700 pl-2 hover:underline font-bold">
             [SALIR]
           </button>
         </div>
@@ -165,27 +174,27 @@
     <section class="lg:col-span-1 flex flex-col gap-4">
       
       <!-- VIEW SWITCHER (retro terminals style) -->
-      <div class="border border-slate-800 bg-[#0d121c] p-2 flex gap-2 font-mono">
+      <div class="border border-neutral-800 bg-[#121212] p-2 flex gap-2 font-mono">
         <button 
           @click="selectView('watchlists')" 
           class="w-1/2 text-center py-1.5 text-xs transition border uppercase font-bold tracking-wider"
-          :class="activeView === 'watchlists' ? 'border-[#00ff66] text-[#00ff66] bg-[#141c2b] glow-green' : 'border-transparent text-slate-400 hover:text-slate-200'"
+          :class="activeView === 'watchlists' ? 'border-[#d92672] text-[#d92672] bg-[#1a1a1a] glow-magenta' : 'border-transparent text-neutral-400 hover:text-neutral-200'"
         >
           Watchlists
         </button>
         <button 
           @click="selectView('portfolio')" 
           class="w-1/2 text-center py-1.5 text-xs transition border uppercase font-bold tracking-wider"
-          :class="activeView === 'portfolio' ? 'border-[#00ff66] text-[#00ff66] bg-[#141c2b] glow-green' : 'border-transparent text-slate-400 hover:text-slate-200'"
+          :class="activeView === 'portfolio' ? 'border-[#d92672] text-[#d92672] bg-[#1a1a1a] glow-magenta' : 'border-transparent text-neutral-400 hover:text-neutral-200'"
         >
           Mi Cartera
         </button>
       </div>
 
       <!-- WATCHLISTS SELECT PANEL -->
-      <div x-show="activeView === 'watchlists'" class="border border-slate-800 bg-[#0d121c] p-4 flex flex-col justify-between h-fit">
+      <div x-show="activeView === 'watchlists'" class="border border-neutral-800 bg-[#121212] p-4 flex flex-col justify-between h-fit">
         <div class="flex justify-between items-center mb-3">
-          <h2 class="text-slate-400 text-xs font-bold uppercase">&gt; Listas de Seguimiento</h2>
+          <h2 class="text-neutral-400 text-xs font-bold uppercase">&gt; Listas de Seguimiento</h2>
           <button @click="startCreatingWatchlist()" class="term-btn text-xs px-2 py-1">+ CREAR</button>
         </div>
 
@@ -198,14 +207,14 @@
                 @click="selectWatchlist(wl.id)" 
                 @dblclick="startEditingWatchlist(wl)"
                 class="w-full text-left px-3 py-2 font-mono text-sm transition duration-150 border flex items-center gap-2"
-                :class="currentWatchlistId === wl.id ? 'border-[#00ff66] text-[#00ff66] bg-[#141c2b] glow-green' : 'border-transparent text-slate-400 hover:text-slate-200 hover:bg-[#141c2b]'">
+                :class="currentWatchlistId === wl.id ? 'border-[#d92672] text-[#d92672] bg-[#1a1a1a] glow-magenta' : 'border-transparent text-neutral-400 hover:text-neutral-200 hover:bg-[#1a1a1a]'">
                 <!-- Drag handle for Watchlist -->
-                <span class="wl-drag-handle cursor-grab active:cursor-grabbing text-slate-600 hover:text-[#00ff66] font-mono text-xs select-none pr-1">☰</span>
+                <span class="wl-drag-handle cursor-grab active:cursor-grabbing text-neutral-600 hover:text-[#d92672] font-mono text-xs select-none pr-1">☰</span>
                 <span x-text="currentWatchlistId === wl.id ? '&gt; ' + wl.name : '  ' + wl.name"></span>
               </button>
               
               <!-- Input inline para renombrar lista -->
-              <div x-show="editingWatchlistId === wl.id" class="w-full px-2 py-1.5 border border-slate-700 bg-slate-950 flex items-center">
+              <div x-show="editingWatchlistId === wl.id" class="w-full px-2 py-1.5 border border-neutral-700 bg-neutral-950 flex items-center">
                 <span class="text-[#00f0ff] mr-1.5 font-mono text-xs">&gt;</span>
                 <input 
                   id="edit-watchlist-input"
@@ -213,7 +222,7 @@
                   x-model="editingWatchlistName" 
                   @keydown.enter="confirmEditWatchlist(wl.id)" 
                   @blur="confirmEditWatchlist(wl.id)" 
-                  class="w-full bg-transparent text-[#00ff66] border-none outline-none font-mono text-xs focus:ring-0 p-0"
+                  class="w-full bg-transparent text-[#d92672] border-none outline-none font-mono text-xs focus:ring-0 p-0"
                   placeholder="Nombre lista..."
                 >
               </div>
@@ -221,26 +230,26 @@
           </template>
 
           <!-- Input inline para crear nueva lista -->
-          <div x-show="isCreatingWatchlist" class="w-full px-2 py-1.5 border border-slate-700 bg-slate-950 flex items-center">
-            <span class="text-[#00ff66] mr-1.5 font-mono text-xs">&gt;</span>
+          <div x-show="isCreatingWatchlist" class="w-full px-2 py-1.5 border border-neutral-700 bg-neutral-950 flex items-center">
+            <span class="text-[#d92672] mr-1.5 font-mono text-xs">&gt;</span>
             <input 
               id="new-watchlist-input"
               type="text" 
               x-model="newWatchlistInputName" 
               @keydown.enter="confirmCreateWatchlist()" 
               @blur="confirmCreateWatchlist()" 
-              class="w-full bg-transparent text-slate-200 border-none outline-none font-mono text-xs focus:ring-0 p-0"
+              class="w-full bg-transparent text-neutral-200 border-none outline-none font-mono text-xs focus:ring-0 p-0"
               placeholder="Nombre lista..."
             >
           </div>
 
           <template x-if="watchlists.length === 0 && !isCreatingWatchlist">
-            <p class="text-slate-600 text-xs py-2 italic font-mono">No hay listas creadas.</p>
+            <p class="text-neutral-600 text-xs py-2 italic font-mono">No hay listas creadas.</p>
           </template>
         </nav>
 
         <template x-if="currentWatchlist">
-          <div class="border-t border-slate-800 pt-3 text-xs">
+          <div class="border-t border-neutral-800 pt-3 text-xs">
             <button @click="deleteWatchlist(currentWatchlist.id)" class="text-[#ff3b30] hover:underline block text-[10px] uppercase font-bold">
               [x] Eliminar esta lista
             </button>
@@ -249,33 +258,33 @@
       </div>
 
       <!-- PORTFOLIO SUMMARY PANEL -->
-      <div x-show="activeView === 'portfolio'" class="border border-slate-800 bg-[#0d121c] p-4 flex flex-col justify-between h-fit font-mono text-xs">
+      <div x-show="activeView === 'portfolio'" class="border border-neutral-800 bg-[#121212] p-4 flex flex-col justify-between h-fit font-mono text-xs">
         <div>
-          <h2 class="text-slate-400 text-xs font-bold uppercase mb-4">&gt; RESUMEN CARTERA</h2>
+          <h2 class="text-neutral-400 text-xs font-bold uppercase mb-4">&gt; RESUMEN CARTERA</h2>
           <div class="flex flex-col gap-3">
-            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
-              <span class="text-slate-500">MONTO INVERTIDO:</span>
-              <span class="text-slate-200 font-bold" x-text="formatPrice(portfolioCost)"></span>
+            <div class="flex justify-between items-center border-b border-neutral-900 pb-2">
+              <span class="text-neutral-500">MONTO INVERTIDO:</span>
+              <span class="text-neutral-200 font-bold" x-text="formatPrice(portfolioCost)"></span>
             </div>
-            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
-              <span class="text-slate-500">VALORIZACIÓN ACTUAL:</span>
+            <div class="flex justify-between items-center border-b border-neutral-900 pb-2">
+              <span class="text-neutral-500">VALORIZACIÓN ACTUAL:</span>
               <div class="flex items-center gap-1">
                 <span class="text-[#00f0ff] font-bold" x-text="formatPrice(portfolioValue)"></span>
                 <span class="font-bold text-[10px]" :class="portfolioDailyChangePercent >= 0 ? 'text-[#00ff66] glow-green' : 'text-[#ff3b30]'" x-text="'(' + formatPercent(portfolioDailyChangePercent) + ')'"></span>
               </div>
             </div>
-            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
-              <span class="text-slate-500">RENDIMIENTO EN USD:</span>
+            <div class="flex justify-between items-center border-b border-neutral-900 pb-2">
+              <span class="text-neutral-500">RENDIMIENTO EN USD:</span>
               <span class="font-bold" :class="portfolioPnL >= 0 ? 'text-[#00ff66] glow-green' : 'text-[#ff3b30]'" x-text="(portfolioPnL >= 0 ? '+' : '') + formatPrice(portfolioPnL)"></span>
             </div>
-            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
-              <span class="text-slate-500">RENDIMIENTO EN %:</span>
+            <div class="flex justify-between items-center border-b border-neutral-900 pb-2">
+              <span class="text-neutral-500">RENDIMIENTO EN %:</span>
               <span class="font-bold" :class="portfolioPnL >= 0 ? 'text-[#00ff66] glow-green' : 'text-[#ff3b30]'" x-text="formatPercent(portfolioPnLPercent)"></span>
             </div>
             <div class="flex justify-between items-center pb-1">
-              <span class="text-slate-500">TIR (XIRR) ANUALIZADA:</span>
+              <span class="text-neutral-500">TIR (XIRR) ANUALIZADA:</span>
               <span class="font-bold" 
-                :class="portfolioTIR !== null ? (portfolioTIR >= 0 ? 'text-[#00ff66] glow-green' : 'text-[#ff3b30]') : 'text-slate-500'"
+                :class="portfolioTIR !== null ? (portfolioTIR >= 0 ? 'text-[#00ff66] glow-green' : 'text-[#ff3b30]') : 'text-neutral-500'"
                 x-text="portfolioTIR !== null ? formatPercent(portfolioTIR) : '—'"></span>
             </div>
           </div>
@@ -283,42 +292,42 @@
       </div>
 
       <!-- PORTFOLIO PERFORMANCE METRICS PANEL -->
-      <div x-show="activeView === 'portfolio'" class="border border-slate-800 bg-[#0d121c] p-4 flex flex-col justify-between h-fit font-mono text-xs mt-2">
+      <div x-show="activeView === 'portfolio'" class="border border-neutral-800 bg-[#121212] p-4 flex flex-col justify-between h-fit font-mono text-xs mt-2">
         <div>
-          <h2 class="text-slate-400 text-xs font-bold uppercase mb-4">&gt; RENDIMIENTO HISTÓRICO</h2>
+          <h2 class="text-neutral-400 text-xs font-bold uppercase mb-4">&gt; RENDIMIENTO HISTÓRICO</h2>
           <div class="flex flex-col gap-3">
-            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
-              <span class="text-slate-500">TASA ACIERTO (WIN RATE):</span>
+            <div class="flex justify-between items-center border-b border-neutral-900 pb-2">
+              <span class="text-neutral-500">TASA ACIERTO (WIN RATE):</span>
               <span class="font-bold text-[#00ff66] glow-green" x-text="formatPercent(portfolioMetrics.win_rate)"></span>
             </div>
-            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
-              <span class="text-slate-500">FACTOR BENEFICIO (PF):</span>
+            <div class="flex justify-between items-center border-b border-neutral-900 pb-2">
+              <span class="text-neutral-500">FACTOR BENEFICIO (PF):</span>
               <span class="font-bold" :class="portfolioMetrics.profit_factor >= 1.5 ? 'text-[#00ff66] glow-green' : (portfolioMetrics.profit_factor >= 1.0 ? 'text-[#00f0ff]' : 'text-[#ff3b30]')" x-text="portfolioMetrics.profit_factor.toFixed(2)"></span>
             </div>
-            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
-              <span class="text-slate-500">OPERACIONES CERRADAS:</span>
-              <div class="flex items-center gap-1 font-bold text-slate-200">
+            <div class="flex justify-between items-center border-b border-neutral-900 pb-2">
+              <span class="text-neutral-500">OPERACIONES CERRADAS:</span>
+              <div class="flex items-center gap-1 font-bold text-neutral-200">
                 <span x-text="portfolioMetrics.total_trades"></span>
-                <span class="text-slate-500 text-[10px]" x-text="'(' + portfolioMetrics.winning_trades + ' G / ' + portfolioMetrics.losing_trades + ' P)'"></span>
+                <span class="text-neutral-500 text-[10px]" x-text="'(' + portfolioMetrics.winning_trades + ' G / ' + portfolioMetrics.losing_trades + ' P)'"></span>
               </div>
             </div>
-            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
-              <span class="text-slate-500">GANANCIA / PÉRDIDA PROM.:</span>
+            <div class="flex justify-between items-center border-b border-neutral-900 pb-2">
+              <span class="text-neutral-500">GANANCIA / PÉRDIDA PROM.:</span>
               <div class="flex items-center gap-1">
                 <span class="text-[#00ff66] font-bold" x-text="formatPrice(portfolioMetrics.avg_win)"></span>
-                <span class="text-slate-600">/</span>
+                <span class="text-neutral-600">/</span>
                 <span class="text-[#ff3b30] font-bold" x-text="formatPrice(portfolioMetrics.avg_loss)"></span>
               </div>
             </div>
-            <div class="flex justify-between items-center border-b border-slate-900 pb-2">
-              <span class="text-slate-500">RELACIÓN G/P PROM.:</span>
-              <span class="font-bold text-slate-200" x-text="portfolioMetrics.win_loss_ratio.toFixed(2)"></span>
+            <div class="flex justify-between items-center border-b border-neutral-900 pb-2">
+              <span class="text-neutral-500">RELACIÓN G/P PROM.:</span>
+              <span class="font-bold text-neutral-200" x-text="portfolioMetrics.win_loss_ratio.toFixed(2)"></span>
             </div>
             <div class="flex justify-between items-center pb-1">
-              <span class="text-slate-500">MAX GANANCIA / PÉRDIDA:</span>
+              <span class="text-neutral-500">MAX GANANCIA / PÉRDIDA:</span>
               <div class="flex items-center gap-1">
                 <span class="text-[#00ff66] font-bold" x-text="formatPrice(portfolioMetrics.largest_win)"></span>
-                <span class="text-slate-600">/</span>
+                <span class="text-neutral-600">/</span>
                 <span class="text-[#ff3b30] font-bold" x-text="formatPrice(portfolioMetrics.largest_loss)"></span>
               </div>
             </div>
@@ -335,19 +344,19 @@
         <div class="flex flex-col gap-4 w-full flex-grow">
           
           <!-- MAIN LIST VIEW -->
-          <div class="border border-slate-800 bg-[#0d121c] p-4 flex-grow flex flex-col min-h-[400px]">
+          <div class="border border-neutral-800 bg-[#121212] p-4 flex-grow flex flex-col min-h-[400px]">
             
             <!-- Cabecera de la lista activa con selector de columnas en tuerca de ajustes -->
-            <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-800">
-              <h2 class="text-[#00ff66] glow-green font-mono text-sm font-bold flex items-center gap-2">
-                <span class="text-slate-500">&gt;</span> LISTA: <span class="text-slate-200" x-text="currentWatchlist.name"></span>
+            <div class="flex justify-between items-center mb-4 pb-2 border-b border-neutral-800">
+              <h2 class="text-[#d92672] glow-magenta font-mono text-sm font-bold flex items-center gap-2">
+                <span class="text-neutral-500">&gt;</span> LISTA: <span class="text-neutral-200" x-text="currentWatchlist.name"></span>
               </h2>
               
               <!-- Menú de Ajustes de Columnas (Tuerca de Ajustes) -->
               <div class="relative" x-data="{ open: false }">
                 <button 
                   @click="open = !open" 
-                  class="text-slate-400 hover:text-[#00ff66] focus:outline-none transition flex items-center gap-1.5 border border-slate-800 hover:border-[#00ff66] bg-slate-950 px-2 py-1 text-[10px] font-mono rounded"
+                  class="text-neutral-400 hover:text-[#d92672] focus:outline-none transition flex items-center gap-1.5 border border-neutral-800 hover:border-[#d92672] bg-neutral-950 px-2 py-1 text-[10px] font-mono rounded"
                   title="Configurar Columnas"
                 >
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -361,14 +370,14 @@
                 <div 
                   x-show="open" 
                   @click.outside="open = false"
-                  class="absolute right-0 mt-1.5 w-56 bg-[#07090e] border border-slate-800 p-3.5 z-50 shadow-2xl font-mono text-xs text-left"
+                  class="absolute right-0 mt-1.5 w-56 bg-[#07090e] border border-neutral-800 p-3.5 z-50 shadow-2xl font-mono text-xs text-left"
                   x-transition
                   style="display: none;"
                 >
-                  <p class="text-slate-500 font-bold uppercase text-[9px] mb-2.5 border-b border-slate-900 pb-1.5">&gt; MOSTRAR COLUMNAS</p>
+                  <p class="text-neutral-500 font-bold uppercase text-[9px] mb-2.5 border-b border-neutral-900 pb-1.5">&gt; MOSTRAR COLUMNAS</p>
                   <div class="flex flex-col gap-2">
                     <template x-for="metric in availableMetrics" :key="metric.id">
-                      <label class="flex items-center gap-2 cursor-pointer text-slate-400 hover:text-slate-200">
+                      <label class="flex items-center gap-2 cursor-pointer text-neutral-400 hover:text-neutral-200">
                         <input 
                           type="checkbox" 
                           class="term-checkbox"
@@ -387,7 +396,7 @@
             <div class="relative mb-4 flex flex-col lg:flex-row gap-3 items-center justify-between w-full">
               <!-- Ticker Search -->
               <div class="w-full lg:w-3/5 relative">
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 text-xs font-mono">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-neutral-500 text-xs font-mono">
                   &gt; BUSCAR ACCIÓN:
                 </div>
                 <input 
@@ -403,25 +412,25 @@
                 <div 
                   x-show="searchResults.length > 0" 
                   @click.outside="searchResults = []"
-                  class="absolute z-50 w-full left-0 mt-1 bg-[#07090e] border border-slate-800 max-h-[250px] overflow-y-auto"
+                  class="absolute z-50 w-full left-0 mt-1 bg-[#07090e] border border-neutral-800 max-h-[250px] overflow-y-auto"
                   x-transition
                 >
                   <template x-for="res in searchResults" :key="res.symbol">
                     <div 
                       @click="addStock(res.symbol)"
-                      class="p-2 border-b border-slate-900 hover:bg-[#141c2b] flex justify-between items-center cursor-pointer text-xs font-mono"
+                      class="p-2 border-b border-neutral-900 hover:bg-[#1a1a1a] flex justify-between items-center cursor-pointer text-xs font-mono"
                     >
                       <div class="flex items-center gap-2">
                         <div class="stock-logo-wrap logo-sm" :style="'background-color:' + getSymbolColor(res.symbol)">
                           <img :src="getLogoUrl(res.symbol)" @error="handleLogoError($event, res.symbol)" alt="" loading="lazy">
                         </div>
                         <span class="text-[#00f0ff] font-bold" x-text="res.symbol"></span>
-                        <span class="text-slate-400 ml-1 truncate max-w-[150px]" x-text="res.name" :title="res.name"></span>
+                        <span class="text-neutral-400 ml-1 truncate max-w-[150px]" x-text="res.name" :title="res.name"></span>
                       </div>
                       <div class="flex gap-2 items-center">
-                        <span class="text-[10px] px-1 bg-slate-800 text-slate-500" x-text="res.exchange"></span>
-                        <span class="text-[10px] px-1 bg-slate-900 text-[#00ff66]" x-text="res.sector"></span>
-                        <span class="text-[#00ff66] text-xs font-bold">+ AGREGAR</span>
+                        <span class="text-[10px] px-1 bg-neutral-800 text-neutral-500" x-text="res.exchange"></span>
+                        <span class="text-[10px] px-1 bg-neutral-900 text-[#d92672]" x-text="res.sector"></span>
+                        <span class="text-[#d92672] text-xs font-bold">+ AGREGAR</span>
                       </div>
                     </div>
                   </template>
@@ -430,7 +439,7 @@
 
               <!-- Section divider creation -->
               <div class="w-full lg:w-2/5 relative">
-                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500 text-xs font-mono">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-neutral-500 text-xs font-mono">
                   &gt; AÑADIR DIVISOR:
                 </div>
                 <input 
@@ -461,25 +470,25 @@
                   <template x-for="item in watchlistItems" :key="item.id">
                     <tr 
                       :data-id="item.id"
-                      class="transition border-b border-slate-900"
+                      class="transition border-b border-neutral-900"
                       :class="{
-                        'bg-slate-900/60 font-bold select-none': item.is_divider,
-                        'hover:bg-[#141c2b]': !item.is_divider
+                        'bg-neutral-900/60 font-bold select-none': item.is_divider,
+                        'hover:bg-[#1a1a1a]': !item.is_divider
                       }"
                     >
                       <!-- DIVIDER CELL (Spans all columns) -->
-                      <td x-show="item.is_divider" :colspan="selectedMetrics.length + 3" class="bg-slate-900/60 py-2 px-3 border-y border-slate-800">
+                      <td x-show="item.is_divider" :colspan="selectedMetrics.length + 3" class="bg-neutral-900/60 py-2 px-3 border-y border-neutral-800">
                         <div class="flex justify-between items-center w-full font-mono text-xs">
                           <div class="flex items-center gap-2">
                             <!-- Drag handle for Divider -->
-                            <span class="drag-handle cursor-grab active:cursor-grabbing text-slate-500 hover:text-[#00ff66] font-mono text-sm font-bold select-none pr-1">☰</span>
-                            <span class="text-slate-600 text-[10px]">▼</span>
+                            <span class="drag-handle cursor-grab active:cursor-grabbing text-neutral-500 hover:text-[#d92672] font-mono text-sm font-bold select-none pr-1">☰</span>
+                            <span class="text-neutral-600 text-[10px]">▼</span>
                             
                             <!-- Título Normal (Doble click para renombrar) -->
                             <span 
                               x-show="editingDividerId !== item.id"
                               @dblclick="startEditingDivider(item)"
-                              class="text-[#00ff66] glow-green uppercase tracking-wider font-bold cursor-pointer select-none"
+                              class="text-[#d92672] glow-magenta uppercase tracking-wider font-bold cursor-pointer select-none"
                               x-text="item.symbol"
                               title="Doble clic para renombrar"
                             ></span>
@@ -492,7 +501,7 @@
                               x-model="editingDividerName" 
                               @keydown.enter="confirmEditDivider(item.id)" 
                               @blur="confirmEditDivider(item.id)" 
-                              class="bg-slate-950 border border-slate-700 text-[#00ff66] font-mono text-xs px-2 py-0.5 outline-none focus:ring-1 focus:ring-[#00ff66] uppercase"
+                              class="bg-neutral-950 border border-neutral-700 text-[#d92672] font-mono text-xs px-2 py-0.5 outline-none focus:ring-1 focus:ring-[#d92672] uppercase"
                             >
                           </div>
                           <div class="flex items-center gap-4">
@@ -505,7 +514,7 @@
                       <td x-show="!item.is_divider" class="font-bold text-[#00f0ff] pr-4">
                         <div class="flex items-center gap-2 w-full">
                           <!-- Drag handle for Stock -->
-                          <span class="drag-handle cursor-grab active:cursor-grabbing text-slate-600 hover:text-[#00ff66] font-mono text-xs select-none">☰</span>
+                          <span class="drag-handle cursor-grab active:cursor-grabbing text-neutral-600 hover:text-[#d92672] font-mono text-xs select-none">☰</span>
                           <div class="stock-logo-wrap" :style="'background-color:' + getSymbolColor(item.symbol)">
                             <img :src="getLogoUrl(item.symbol)" @error="handleLogoError($event, item.symbol)" alt="" loading="lazy">
                           </div>
@@ -513,21 +522,21 @@
                         </div>
                       </td>
                       
-                      <td x-show="!item.is_divider" class="text-slate-300 truncate max-w-[150px]" x-text="item.name" :title="item.name"></td>
+                      <td x-show="!item.is_divider" class="text-neutral-300 truncate max-w-[150px]" x-text="item.name" :title="item.name"></td>
                       
                       <!-- Dynamic metrics values -->
                       <template x-for="mId in selectedMetrics">
                         <td x-show="!item.is_divider" class="whitespace-nowrap">
                           <!-- SECTOR -->
                           <template x-if="mId === 'sector'">
-                            <span class="text-slate-400 text-xs px-1.5 py-0.5 bg-slate-900 border border-slate-800" x-text="item.sector"></span>
+                            <span class="text-neutral-400 text-xs px-1.5 py-0.5 bg-neutral-900 border border-neutral-800" x-text="item.sector"></span>
                           </template>
                           <!-- PRICE -->
                           <template x-if="mId === 'price'">
                             <span 
-                              class="text-slate-200 font-bold px-1.5 py-0.5 rounded transition-all duration-500"
+                              class="text-neutral-200 font-bold px-1.5 py-0.5 rounded transition-all duration-500"
                               :class="{
-                                'bg-[rgba(0,255,102,0.25)] text-[#00ff66] glow-green': item.flash === 'up',
+                                'bg-[rgba(0,255,102,0.2)] text-[#00ff66] glow-green': item.flash === 'up',
                                 'bg-[rgba(255,59,48,0.25)] text-[#ff3b30]': item.flash === 'down'
                               }"
                               x-text="formatPrice(item.price)"
@@ -535,18 +544,18 @@
                           </template>
                           <!-- PREV CLOSE -->
                           <template x-if="mId === 'prev_close'">
-                            <span class="text-slate-400" x-text="formatPrice(item.prev_close)"></span>
+                            <span class="text-neutral-400" x-text="formatPrice(item.prev_close)"></span>
                           </template>
                           <!-- CHANGE ($) -->
                           <template x-if="mId === 'change'">
                             <span 
                               class="px-1 py-0.5 rounded transition-all duration-500"
                               :class="{
-                                'bg-[rgba(0,255,102,0.25)] text-[#00ff66]': item.flash === 'up',
+                                'bg-[rgba(0,255,102,0.2)] text-[#00ff66]': item.flash === 'up',
                                 'bg-[rgba(255,59,48,0.25)] text-[#ff3b30]': item.flash === 'down',
                                 'text-[#00ff66]': !item.flash && item.change > 0,
                                 'text-[#ff3b30]': !item.flash && item.change < 0,
-                                'text-slate-400': !item.flash && (item.change === 0 || item.change === null)
+                                'text-neutral-400': !item.flash && (item.change === 0 || item.change === null)
                               }"
                               x-text="item.change !== null ? (item.change > 0 ? '+' : '') + item.change.toFixed(2) : 'N/A'"
                             ></span>
@@ -556,22 +565,22 @@
                             <span 
                               class="px-1 py-0.5 rounded transition-all duration-500"
                               :class="{
-                                'bg-[rgba(0,255,102,0.25)] text-[#00ff66] font-bold': item.flash === 'up',
+                                'bg-[rgba(0,255,102,0.2)] text-[#00ff66] font-bold': item.flash === 'up',
                                 'bg-[rgba(255,59,48,0.25)] text-[#ff3b30] font-bold': item.flash === 'down',
                                 'text-[#00ff66] font-bold': !item.flash && item.change_percent > 0,
                                 'text-[#ff3b30] font-bold': !item.flash && item.change_percent < 0,
-                                'text-slate-400': !item.flash && (item.change_percent === 0 || item.change_percent === null)
+                                'text-neutral-400': !item.flash && (item.change_percent === 0 || item.change_percent === null)
                               }"
                               x-text="formatPercent(item.change_percent)"
                             ></span>
                           </template>
                           <!-- VOLUME -->
                           <template x-if="mId === 'volume'">
-                            <span class="text-slate-400" x-text="item.volume ? item.volume.toLocaleString() : 'N/A'"></span>
+                            <span class="text-neutral-400" x-text="item.volume ? item.volume.toLocaleString() : 'N/A'"></span>
                           </template>
                           <!-- MARKET CAP -->
                           <template x-if="mId === 'market_cap'">
-                            <span class="text-slate-300" x-text="formatMarketCap(item.market_cap)"></span>
+                            <span class="text-neutral-300" x-text="formatMarketCap(item.market_cap)"></span>
                           </template>
                           <!-- PE RATIO -->
                           <template x-if="mId === 'pe'">
@@ -579,7 +588,7 @@
                           </template>
                           <!-- DIVIDEND YIELD -->
                           <template x-if="mId === 'dividend_yield'">
-                            <span class="text-slate-300" x-text="item.dividend_yield ? (item.dividend_yield * 100).toFixed(2) + '%' : 'N/A'"></span>
+                            <span class="text-neutral-300" x-text="item.dividend_yield ? (item.dividend_yield * 100).toFixed(2) + '%' : 'N/A'"></span>
                           </template>
                         </td>
                       </template>
@@ -593,7 +602,7 @@
                   
                   <template x-if="watchlistItems.length === 0">
                     <tr>
-                      <td :colspan="selectedMetrics.length + 3" class="text-slate-500 text-center py-8 italic">
+                      <td :colspan="selectedMetrics.length + 3" class="text-neutral-500 text-center py-8 italic">
                         Esta lista está vacía. Añade un símbolo usando el buscador arriba.
                       </td>
                     </tr>
@@ -608,12 +617,12 @@
 
       <!-- PANTALLA DE BIENVENIDA / SIN SELECCIÓN -->
       <template x-if="activeView === 'watchlists' && !currentWatchlist">
-        <div class="border border-slate-800 bg-[#0d121c] p-8 flex-grow flex flex-col justify-center items-center text-center min-h-[400px] font-mono">
-          <div class="text-[#00ff66] text-xl mb-4 glow-green font-bold">&gt; SELECCIONE UNA LISTA DE SEGUIMIENTO</div>
-          <p class="text-slate-500 text-sm max-w-md">
+        <div class="border border-neutral-800 bg-[#121212] p-8 flex-grow flex flex-col justify-center items-center text-center min-h-[400px] font-mono">
+          <div class="text-[#d92672] text-xl mb-4 glow-magenta font-bold">&gt; SELECCIONE UNA LISTA DE SEGUIMIENTO</div>
+          <p class="text-neutral-500 text-sm max-w-md">
             Usa el menú de la izquierda para seleccionar una lista de acciones o haz clic en "+ CREAR" para iniciar una nueva lista de seguimiento.
           </p>
-          <div class="mt-8 text-[10px] text-slate-600 animate-pulse">
+          <div class="mt-8 text-[10px] text-neutral-600 animate-pulse">
             [ EN ESPERA DE SELECCIÓN DE ENTRADA ]
           </div>
         </div>
@@ -627,14 +636,14 @@
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
             
             <!-- TABLA DE TENENCIAS CONSOLIDADAS (8/12 columnas) -->
-            <div class="lg:col-span-7 xl:col-span-8 border border-slate-800 bg-[#0d121c] p-4 flex flex-col min-h-[220px]">
-              <h2 class="text-[#00ff66] glow-green font-mono text-sm font-bold mb-3 flex items-center gap-2">
-                <span class="text-slate-500">&gt;</span> TENENCIAS CONSOLIDADAS (PPC)
+            <div class="lg:col-span-7 xl:col-span-8 border border-neutral-800 bg-[#121212] p-4 flex flex-col min-h-[220px]">
+              <h2 class="text-[#d92672] glow-magenta font-mono text-sm font-bold mb-3 flex items-center gap-2">
+                <span class="text-neutral-500">&gt;</span> TENENCIAS CONSOLIDADAS (PPC)
               </h2>
               <div class="overflow-x-auto flex-grow">
                 <table class="w-full term-table term-table-compact font-mono text-left text-xs">
                   <thead>
-                    <tr class="border-b border-slate-800 pb-2">
+                    <tr class="border-b border-neutral-800 pb-2">
                       <th class="py-2" title="Ticker Internacional">TICKER</th>
                       <th title="Valor Nominal">VN</th>
                       <th title="Acciones Equivalentes">ACC. EQUIV.</th>
@@ -648,7 +657,7 @@
                   </thead>
                   <tbody>
                     <template x-for="item in portfolioItems" :key="item.symbol">
-                      <tr class="hover:bg-[#141c2b] border-b border-slate-900">
+                      <tr class="hover:bg-[#1a1a1a] border-b border-neutral-900">
                         <td class="font-bold text-[#00f0ff] py-2">
                           <div class="flex items-center gap-2">
                             <div class="stock-logo-wrap logo-sm" :style="'background-color:' + getSymbolColor(item.symbol)">
@@ -657,11 +666,11 @@
                             <span x-text="item.symbol"></span>
                           </div>
                         </td>
-                        <td class="text-slate-300" x-text="item.vn_total.toLocaleString()"></td>
-                        <td class="text-slate-400" x-text="item.acciones_equivalentes % 1 === 0 ? item.acciones_equivalentes.toFixed(0) : item.acciones_equivalentes.toFixed(2)"></td>
-                        <td class="text-slate-300" x-text="formatPrice(item.ppc_comparable)"></td>
-                        <td class="text-slate-400" x-text="formatPrice(item.costo_total_usd)"></td>
-                        <td class="text-slate-200 font-bold" x-text="formatPrice(item.precio_afuera)"></td>
+                        <td class="text-neutral-300" x-text="item.vn_total.toLocaleString()"></td>
+                        <td class="text-neutral-400" x-text="item.acciones_equivalentes % 1 === 0 ? item.acciones_equivalentes.toFixed(0) : item.acciones_equivalentes.toFixed(2)"></td>
+                        <td class="text-neutral-300" x-text="formatPrice(item.ppc_comparable)"></td>
+                        <td class="text-neutral-400" x-text="formatPrice(item.costo_total_usd)"></td>
+                        <td class="text-neutral-200 font-bold" x-text="formatPrice(item.precio_afuera)"></td>
                         <td class="text-[#00f0ff]" x-text="formatPrice(item.valor_actual_usd)"></td>
                         <td class="font-bold" :class="item.pnl_usd >= 0 ? 'text-[#00ff66]' : 'text-[#ff3b30]'" x-text="(item.pnl_usd >= 0 ? '+' : '') + formatPrice(item.pnl_usd)"></td>
                         <td class="font-bold" :class="item.pnl_percent >= 0 ? 'text-[#00ff66]' : 'text-[#ff3b30]'" x-text="formatPercent(item.pnl_percent)"></td>
@@ -669,9 +678,9 @@
                     </template>
                     <template x-if="portfolioItems.length === 0">
                       <tr>
-                        <td colspan="9" class="text-slate-500 text-center py-8 italic">
-                          <span x-show="isPortfolioLoading" class="text-[#00ff66] animate-pulse flex items-center justify-center gap-2">
-                            <span class="inline-block w-2 h-2 rounded-full bg-[#00ff66]"></span> Sincronizando cartera y cotizaciones en tiempo real...
+                        <td colspan="9" class="text-neutral-500 text-center py-8 italic">
+                          <span x-show="isPortfolioLoading" class="text-[#d92672] animate-pulse flex items-center justify-center gap-2">
+                            <span class="inline-block w-2 h-2 rounded-full bg-[#d92672]"></span> Sincronizando cartera y cotizaciones en tiempo real...
                           </span>
                           <span x-show="!isPortfolioLoading">
                             No hay tenencias activas. Registra una operación de compra abajo para comenzar.
@@ -685,9 +694,9 @@
             </div>
 
             <!-- DISTRIBUCIÓN DE CARTERA (4/12 columnas) -->
-            <div class="lg:col-span-5 xl:col-span-4 border border-slate-800 bg-[#0d121c] p-4 flex flex-col min-h-[220px]">
-              <h2 class="text-[#00ff66] glow-green font-mono text-sm font-bold mb-3 flex items-center gap-2">
-                <span class="text-slate-500">&gt;</span> DISTRIBUCIÓN DE CARTERA (VALOR ACTUAL USD)
+            <div class="lg:col-span-5 xl:col-span-4 border border-neutral-800 bg-[#121212] p-4 flex flex-col min-h-[220px]">
+              <h2 class="text-[#d92672] glow-magenta font-mono text-sm font-bold mb-3 flex items-center gap-2">
+                <span class="text-neutral-500">&gt;</span> DISTRIBUCIÓN DE CARTERA (VALOR ACTUAL USD)
               </h2>
               <div class="flex-grow relative w-full min-h-[220px] pb-2">
                 <div id="portfolioTreemap" class="w-full h-full"></div>
@@ -700,15 +709,15 @@
           <div class="grid grid-cols-1 xl:grid-cols-5 gap-4">
             
             <!-- FORMULARIO DE REGISTRO DE TRANSACCIÓN (2/5 columnas) -->
-            <div class="xl:col-span-2 border border-slate-800 bg-[#0d121c] p-4 flex flex-col justify-between">
+            <div class="xl:col-span-2 border border-neutral-800 bg-[#121212] p-4 flex flex-col justify-between">
               <div class="flex justify-between items-center mb-3">
-                <h2 class="text-[#00ff66] glow-green font-mono text-sm font-bold flex items-center gap-2">
-                  <span class="text-slate-500">&gt;</span> <span x-text="editingTransactionId === null ? 'REGISTRAR OPERACIÓN' : 'EDITAR OPERACIÓN'"></span>
+                <h2 class="text-[#d92672] glow-magenta font-mono text-sm font-bold flex items-center gap-2">
+                  <span class="text-neutral-500">&gt;</span> <span x-text="editingTransactionId === null ? 'REGISTRAR OPERACIÓN' : 'EDITAR OPERACIÓN'"></span>
                 </h2>
                 <button 
                   type="button" 
                   @click="showTxHelpModal = true" 
-                  class="term-btn text-xs px-2 py-1 flex items-center gap-1 hover:bg-[#141c2b] text-[#00f0ff] border-[#00f0ff]/40 font-mono"
+                  class="term-btn text-xs px-2 py-1 flex items-center gap-1 hover:bg-[#1a1a1a] text-[#00f0ff] border-[#00f0ff]/40 font-mono"
                   title="Guía de uso para registrar operaciones"
                 >
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -722,7 +731,7 @@
               <div 
                 x-show="showTxHelpModal" 
                 x-cloak 
-                class="fixed inset-0 z-50 bg-[#070b12]/80 backdrop-blur-sm flex items-center justify-center p-4 font-mono"
+                class="fixed inset-0 z-50 bg-[#080808]/80 backdrop-blur-sm flex items-center justify-center p-4 font-mono"
                 @keydown.escape.window="showTxHelpModal = false"
                 x-transition:enter="transition ease-out duration-200"
                 x-transition:enter-start="opacity-0"
@@ -733,7 +742,7 @@
               >
                 <div 
                   @click.away="showTxHelpModal = false" 
-                  class="bg-[#0d121c] border border-slate-700 shadow-2xl max-w-xl w-full p-6 text-slate-300 relative border-l-4 border-l-[#00f0ff] max-h-[90vh] overflow-y-auto"
+                  class="bg-[#121212] border border-neutral-700 shadow-2xl max-w-xl w-full p-6 text-neutral-300 relative border-l-4 border-l-[#00f0ff] max-h-[90vh] overflow-y-auto"
                   x-transition:enter="transition ease-out duration-200"
                   x-transition:enter-start="opacity-0 scale-95"
                   x-transition:enter-end="opacity-100 scale-100"
@@ -742,79 +751,79 @@
                   x-transition:leave-end="opacity-0 scale-95"
                 >
                   <!-- Header -->
-                  <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
+                  <div class="flex items-center justify-between pb-3 mb-4 border-b border-neutral-800">
                     <h3 class="text-[#00f0ff] font-bold text-sm flex items-center gap-2 tracking-wider uppercase">
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"></path>
                       </svg>
                       <span>&gt; GUÍA DE REGISTRO MANUAL DE OPERACIONES</span>
                     </h3>
-                    <button @click="showTxHelpModal = false" class="text-slate-500 hover:text-red-400 font-bold text-base px-1 transition-colors">✕</button>
+                    <button @click="showTxHelpModal = false" class="text-neutral-500 hover:text-red-400 font-bold text-base px-1 transition-colors">✕</button>
                   </div>
 
                   <!-- Steps List -->
                   <div class="space-y-2 mb-5 text-xs font-mono">
-                    <div class="flex items-start gap-2.5 bg-[#141c2b]/70 border border-slate-800/80 p-2 rounded">
+                    <div class="flex items-start gap-2.5 bg-[#1a1a1a]/70 border border-neutral-800/80 p-2 rounded">
                       <span class="bg-[#00f0ff]/10 text-[#00f0ff] border border-[#00f0ff]/30 px-1.5 py-0.5 rounded font-bold text-[10px]">1</span>
                       <div>
                         <span class="text-white font-semibold">Escribir el Ticker:</span>
-                        <p class="text-slate-400 text-[11px] mt-0.5">Ingresa el ticker que se operó (ej: <strong class="text-[#00f0ff]">AAPL</strong>, <strong class="text-[#00f0ff]">NVDA</strong>, <strong class="text-[#00f0ff]">MELI</strong>). Automáticamente se definirá el ratio del CEDEAR respecto a la acción del exterior.</p>
+                        <p class="text-neutral-400 text-[11px] mt-0.5">Ingresa el ticker que se operó (ej: <strong class="text-[#00f0ff]">AAPL</strong>, <strong class="text-[#00f0ff]">NVDA</strong>, <strong class="text-[#00f0ff]">MELI</strong>). Automáticamente se definirá el ratio del CEDEAR respecto a la acción del exterior.</p>
                       </div>
                     </div>
 
-                    <div class="flex items-start gap-2.5 bg-[#141c2b]/70 border border-slate-800/80 p-2 rounded">
-                      <span class="bg-[#00ff66]/10 text-[#00ff66] border border-[#00ff66]/30 px-1.5 py-0.5 rounded font-bold text-[10px]">2</span>
+                    <div class="flex items-start gap-2.5 bg-[#1a1a1a]/70 border border-neutral-800/80 p-2 rounded">
+                      <span class="bg-[#d92672]/10 text-[#d92672] border border-[#d92672]/30 px-1.5 py-0.5 rounded font-bold text-[10px]">2</span>
                       <div>
                         <span class="text-white font-semibold">Seleccionar Tipo de Operación:</span>
-                        <p class="text-slate-400 text-[11px] mt-0.5">Indica si fue una <strong class="text-[#00ff66]">Compra</strong> o una <strong class="text-red-400">Venta</strong>.</p>
+                        <p class="text-neutral-400 text-[11px] mt-0.5">Indica si fue una <strong class="text-[#d92672]">Compra</strong> o una <strong class="text-red-400">Venta</strong>.</p>
                       </div>
                     </div>
 
-                    <div class="flex items-start gap-2.5 bg-[#141c2b]/70 border border-slate-800/80 p-2 rounded">
+                    <div class="flex items-start gap-2.5 bg-[#1a1a1a]/70 border border-neutral-800/80 p-2 rounded">
                       <span class="bg-amber-400/10 text-amber-400 border border-amber-400/30 px-1.5 py-0.5 rounded font-bold text-[10px]">3</span>
                       <div>
                         <span class="text-white font-semibold">Escribir Nominales (VN):</span>
-                        <p class="text-slate-400 text-[11px] mt-0.5">Ingresa la cantidad de nominales operados en la cuenta local.</p>
+                        <p class="text-neutral-400 text-[11px] mt-0.5">Ingresa la cantidad de nominales operados en la cuenta local.</p>
                       </div>
                     </div>
 
-                    <div class="flex items-start gap-2.5 bg-[#141c2b]/70 border border-slate-800/80 p-2 rounded">
+                    <div class="flex items-start gap-2.5 bg-[#1a1a1a]/70 border border-neutral-800/80 p-2 rounded">
                       <span class="bg-emerald-400/10 text-emerald-400 border border-emerald-400/30 px-1.5 py-0.5 rounded font-bold text-[10px]">4</span>
                       <div>
                         <span class="text-white font-semibold">Seleccionar Moneda de Pago:</span>
-                        <p class="text-slate-400 text-[11px] mt-0.5">Elige <strong class="text-slate-200">Pesos (ARS)</strong> o <strong class="text-slate-200">Dólar MEP (USD)</strong>. Para pesos se toma automáticamente el <strong class="text-[#00f0ff]">Dólar CCL</strong> del momento, y para MEP se toma el <strong class="text-[#00f0ff]">Canje MEP-CCL</strong>.</p>
+                        <p class="text-neutral-400 text-[11px] mt-0.5">Elige <strong class="text-neutral-200">Pesos (ARS)</strong> o <strong class="text-neutral-200">Dólar MEP (USD)</strong>. Para pesos se toma automáticamente el <strong class="text-[#00f0ff]">Dólar CCL</strong> del momento, y para MEP se toma el <strong class="text-[#00f0ff]">Canje MEP-CCL</strong>.</p>
                       </div>
                     </div>
 
-                    <div class="flex items-start gap-2.5 bg-[#141c2b]/70 border border-slate-800/80 p-2 rounded">
+                    <div class="flex items-start gap-2.5 bg-[#1a1a1a]/70 border border-neutral-800/80 p-2 rounded">
                       <span class="bg-indigo-400/10 text-indigo-400 border border-indigo-400/30 px-1.5 py-0.5 rounded font-bold text-[10px]">5</span>
                       <div>
                         <span class="text-white font-semibold">Escribir Precio Operado:</span>
-                        <p class="text-slate-400 text-[11px] mt-0.5">Ingresa el precio unitario pactado en la operación en la moneda elegida.</p>
+                        <p class="text-neutral-400 text-[11px] mt-0.5">Ingresa el precio unitario pactado en la operación en la moneda elegida.</p>
                       </div>
                     </div>
 
-                    <div class="flex items-start gap-2.5 bg-[#141c2b]/70 border border-slate-800/80 p-2 rounded">
+                    <div class="flex items-start gap-2.5 bg-[#1a1a1a]/70 border border-neutral-800/80 p-2 rounded">
                       <span class="bg-sky-400/10 text-sky-400 border border-sky-400/30 px-1.5 py-0.5 rounded font-bold text-[10px]">6</span>
                       <div>
                         <span class="text-white font-semibold">Seleccionar Fecha:</span>
-                        <p class="text-slate-400 text-[11px] mt-0.5">Si la operación es de <strong class="text-slate-200">hoy</strong>, déjala vacía. De ser una <strong class="text-slate-200">fecha anterior</strong>, el sistema cargará automáticamente el dólar CCL o Canje de cierre de ese día.</p>
+                        <p class="text-neutral-400 text-[11px] mt-0.5">Si la operación es de <strong class="text-neutral-200">hoy</strong>, déjala vacía. De ser una <strong class="text-neutral-200">fecha anterior</strong>, el sistema cargará automáticamente el dólar CCL o Canje de cierre de ese día.</p>
                       </div>
                     </div>
 
-                    <div class="flex items-start gap-2.5 bg-[#141c2b]/70 border border-slate-800/80 p-2 rounded">
-                      <span class="bg-slate-400/10 text-slate-400 border border-slate-400/30 px-1.5 py-0.5 rounded font-bold text-[10px]">7</span>
+                    <div class="flex items-start gap-2.5 bg-[#1a1a1a]/70 border border-neutral-800/80 p-2 rounded">
+                      <span class="bg-neutral-400/10 text-neutral-400 border border-neutral-400/30 px-1.5 py-0.5 rounded font-bold text-[10px]">7</span>
                       <div>
                         <span class="text-white font-semibold">Agregar una Nota (Opcional):</span>
-                        <p class="text-slate-400 text-[11px] mt-0.5">Puedes ingresar cualquier nota descriptiva (ej. "Toma de ganancias", "Estrategia DCA").</p>
+                        <p class="text-neutral-400 text-[11px] mt-0.5">Puedes ingresar cualquier nota descriptiva (ej. "Toma de ganancias", "Estrategia DCA").</p>
                       </div>
                     </div>
 
-                    <div class="flex items-start gap-2.5 bg-[#141c2b]/70 border border-slate-800/80 p-2 rounded">
-                      <span class="bg-[#00ff66]/10 text-[#00ff66] border border-[#00ff66]/30 px-1.5 py-0.5 rounded font-bold text-[10px]">8</span>
+                    <div class="flex items-start gap-2.5 bg-[#1a1a1a]/70 border border-neutral-800/80 p-2 rounded">
+                      <span class="bg-[#d92672]/10 text-[#d92672] border border-[#d92672]/30 px-1.5 py-0.5 rounded font-bold text-[10px]">8</span>
                       <div>
                         <span class="text-white font-semibold">Registrar Transacción:</span>
-                        <p class="text-slate-400 text-[11px] mt-0.5">Haz clic en <strong class="text-[#00ff66]">+ REGISTRAR TRANSACCIÓN</strong> para guardar la operación.</p>
+                        <p class="text-neutral-400 text-[11px] mt-0.5">Haz clic en <strong class="text-[#d92672]">+ REGISTRAR TRANSACCIÓN</strong> para guardar la operación.</p>
                       </div>
                     </div>
                   </div>
@@ -827,13 +836,13 @@
                       </svg>
                       <span>REGISTRO DE CASH INICIAL / DISPONIBLE</span>
                     </div>
-                    <p class="text-[11px] leading-relaxed text-slate-300">
-                      En la primera importación o carga de transacciones, se deberá registrar el cash disponible en ese momento, indicando en ticker <strong class="text-[#00f0ff]">CASH</strong>, tipo <strong class="text-[#00ff66]">COMPRA</strong>, cantidad en USD, precio <strong class="text-white">1.0</strong> y moneda <strong class="text-white">USD</strong>.
+                    <p class="text-[11px] leading-relaxed text-neutral-300">
+                      En la primera importación o carga de transacciones, se deberá registrar el cash disponible en ese momento, indicando en ticker <strong class="text-[#00f0ff]">CASH</strong>, tipo <strong class="text-[#d92672]">COMPRA</strong>, cantidad en USD, precio <strong class="text-white">1.0</strong> y moneda <strong class="text-white">USD</strong>.
                     </p>
                   </div>
 
                   <!-- Footer Close Button -->
-                  <div class="flex justify-end pt-2 border-t border-slate-800">
+                  <div class="flex justify-end pt-2 border-t border-neutral-800">
                     <button 
                       type="button" 
                       @click="showTxHelpModal = false" 
@@ -847,7 +856,7 @@
               <form @submit.prevent="submitTransaction()" class="font-mono text-xs flex flex-col gap-3">
                 <div class="grid grid-cols-2 gap-3">
                   <div class="relative">
-                    <label class="text-slate-500 block mb-1">TICKER EXT. (ej: AAPL)</label>
+                    <label class="text-neutral-500 block mb-1">TICKER EXT. (ej: AAPL)</label>
                     <input 
                       type="text" 
                       x-model="txForm.symbol" 
@@ -861,33 +870,33 @@
                     <div 
                       x-show="portfolioSearchResults.length > 0" 
                       @click.outside="portfolioSearchResults = []"
-                      class="absolute z-50 w-full left-0 mt-1 bg-[#07090e] border border-slate-800 max-h-[180px] overflow-y-auto"
+                      class="absolute z-50 w-full left-0 mt-1 bg-[#07090e] border border-neutral-800 max-h-[180px] overflow-y-auto"
                       x-transition
                       style="display: none;"
                     >
                       <template x-for="res in portfolioSearchResults" :key="res.symbol">
                         <div 
                           @click="selectPortfolioStock(res.symbol)"
-                          class="p-2 border-b border-slate-900 hover:bg-[#141c2b] flex justify-between items-center cursor-pointer text-[10px] font-mono text-left"
+                          class="p-2 border-b border-neutral-900 hover:bg-[#1a1a1a] flex justify-between items-center cursor-pointer text-[10px] font-mono text-left"
                         >
                           <div class="flex items-center gap-1.5">
                             <div class="stock-logo-wrap logo-sm" :style="'background-color:' + getSymbolColor(res.symbol)">
                               <img :src="getLogoUrl(res.symbol)" @error="handleLogoError($event, res.symbol)" alt="" loading="lazy">
                             </div>
                             <span class="text-[#00f0ff] font-bold" x-text="res.symbol"></span>
-                            <span class="text-slate-400 ml-1 text-slate-500 truncate max-w-[120px]" x-text="res.name" :title="res.name"></span>
+                            <span class="text-neutral-400 ml-1 text-neutral-500 truncate max-w-[120px]" x-text="res.name" :title="res.name"></span>
                           </div>
                           <div class="flex gap-1.5 items-center">
-                            <span class="text-[9px] px-1 bg-slate-800 text-slate-500" x-text="res.exchange"></span>
-                            <span class="text-[#00ff66] font-bold">+</span>
+                            <span class="text-[9px] px-1 bg-neutral-800 text-neutral-500" x-text="res.exchange"></span>
+                            <span class="text-[#d92672] font-bold">+</span>
                           </div>
                         </div>
                       </template>
                     </div>
                   </div>
                   <div>
-                    <label class="text-slate-500 block mb-1">TIPO OPERACIÓN</label>
-                    <select x-model="txForm.operation_type" class="term-input w-full bg-slate-950 text-slate-200">
+                    <label class="text-neutral-500 block mb-1">TIPO OPERACIÓN</label>
+                    <select x-model="txForm.operation_type" class="term-input w-full bg-neutral-950 text-neutral-200">
                       <option value="BUY">COMPRA</option>
                       <option value="SELL">VENTA</option>
                     </select>
@@ -896,12 +905,12 @@
 
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <label class="text-slate-500 block mb-1">NOMINAL (VN)</label>
+                    <label class="text-neutral-500 block mb-1">NOMINAL (VN)</label>
                     <input type="number" step="any" x-model="txForm.quantity" placeholder="100" class="term-input w-full" required>
                   </div>
                   <div>
-                    <label class="text-slate-500 block mb-1">MONEDA PAGO</label>
-                    <select x-model="txForm.currency" @change="onCurrencyChange()" class="term-input w-full bg-slate-950 text-slate-200">
+                    <label class="text-neutral-500 block mb-1">MONEDA PAGO</label>
+                    <select x-model="txForm.currency" @change="onCurrencyChange()" class="term-input w-full bg-neutral-950 text-neutral-200">
                       <option value="ARS">PESOS (ARS)</option>
                       <option value="USD">DÓLARES (USD)</option>
                     </select>
@@ -910,16 +919,16 @@
 
                 <div class="grid grid-cols-3 gap-2">
                   <div>
-                    <label class="text-slate-500 block mb-1">PRECIO OPERADO</label>
+                    <label class="text-neutral-500 block mb-1">PRECIO OPERADO</label>
                     <input type="number" step="any" x-model="txForm.price" placeholder="750" class="term-input w-full" required>
                   </div>
                   <div>
-                    <label class="text-slate-500 block mb-1">RATIO CEDEAR</label>
+                    <label class="text-neutral-500 block mb-1">RATIO CEDEAR</label>
                     <input type="number" step="any" x-model="txForm.ratio" class="term-input w-full" required>
                   </div>
                   <div>
                     <div class="flex justify-between items-center mb-1">
-                      <label class="text-slate-500 block" x-text="txForm.currency === 'ARS' ? 'DÓLAR CCL' : 'CANJE MEP-CCL'"></label>
+                      <label class="text-neutral-500 block" x-text="txForm.currency === 'ARS' ? 'DÓLAR CCL' : 'CANJE MEP-CCL'"></label>
                       <button type="button" @click="fetchExchangeRate()" class="text-xs text-amber-500 hover:text-amber-400 focus:outline-none font-bold" title="Autocompletar cotización">
                         Auto ⚡
                       </button>
@@ -930,21 +939,21 @@
 
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <label class="text-slate-500 block mb-1">FECHA OPERACIÓN (VACÍO = HOY)</label>
-                    <input type="date" x-model="txForm.date" class="term-input w-full bg-slate-950 text-slate-200">
+                    <label class="text-neutral-500 block mb-1">FECHA OPERACIÓN (VACÍO = HOY)</label>
+                    <input type="date" x-model="txForm.date" class="term-input w-full bg-neutral-950 text-neutral-200">
                   </div>
                   <div>
-                    <label class="text-slate-500 block mb-1">NOTAS</label>
+                    <label class="text-neutral-500 block mb-1">NOTAS</label>
                     <input type="text" x-model="txForm.notes" placeholder="Ej: Compra Cedear en ByMA" class="term-input w-full">
                   </div>
                 </div>
 
                 <!-- Live calculation preview -->
-                <div class="bg-slate-950 border border-slate-900 p-2 text-[10px] text-slate-400">
+                <div class="bg-neutral-950 border border-neutral-900 p-2 text-[10px] text-neutral-400">
                   <span class="text-amber-500 font-bold">VISTA PREVIA COMPRABLE:</span>
                   <div class="mt-1">
                     <span>Precio Acción Ext. Equivalente:</span>
-                    <span class="text-slate-200 font-bold" x-text="
+                    <span class="text-neutral-200 font-bold" x-text="
                       (() => {
                         const prc = parseFloat(txForm.price) || 0;
                         const rat = parseFloat(txForm.ratio) || 1;
@@ -963,14 +972,14 @@
                   </div>
                   <div>
                     <span>Acciones Equivalentes:</span>
-                    <span class="text-slate-200 font-bold" x-text="((parseFloat(txForm.quantity) || 0) / (parseFloat(txForm.ratio) || 1)).toFixed(4)"></span>
+                    <span class="text-neutral-200 font-bold" x-text="((parseFloat(txForm.quantity) || 0) / (parseFloat(txForm.ratio) || 1)).toFixed(4)"></span>
                   </div>
                 </div>
 
                 <div class="flex flex-col gap-2">
                   <button type="submit" 
-                          :class="editingTransactionId === null ? 'border-[#00ff66] text-[#00ff66]' : 'border-[#00f0ff] text-[#00f0ff]'" 
-                          class="term-btn uppercase font-bold py-1.5 w-full mt-1 hover:bg-[#141c2b]"
+                          :class="editingTransactionId === null ? 'border-[#d92672] text-[#d92672]' : 'border-[#00f0ff] text-[#00f0ff]'" 
+                          class="term-btn uppercase font-bold py-1.5 w-full mt-1 hover:bg-[#1a1a1a]"
                           x-text="editingTransactionId === null ? '+ REGISTRAR TRANSACCIÓN' : '✔ ACTUALIZAR TRANSACCIÓN'"></button>
                   <button type="button" @click="cancelEditTransaction()" x-show="editingTransactionId !== null" class="term-btn uppercase font-bold py-1.5 w-full border-red-500 text-red-500 hover:bg-[#ff3b30]/10" x-transition style="display: none;">✕ CANCELAR EDICIÓN</button>
                 </div>
@@ -978,11 +987,11 @@
             </div>
 
             <!-- LOG DE TRANSACCIONES (3/5 columnas) -->
-            <div class="xl:col-span-3 border border-slate-800 bg-[#0d121c] p-4 flex flex-col justify-between">
+            <div class="xl:col-span-3 border border-neutral-800 bg-[#121212] p-4 flex flex-col justify-between">
               <div>
                 <div class="flex justify-between items-center mb-3">
-                  <h2 class="text-[#00ff66] glow-green font-mono text-sm font-bold flex items-center gap-2">
-                    <span class="text-slate-500">&gt;</span> REGISTRO DE TRANSACCIONES
+                  <h2 class="text-[#d92672] glow-magenta font-mono text-sm font-bold flex items-center gap-2">
+                    <span class="text-neutral-500">&gt;</span> REGISTRO DE TRANSACCIONES
                   </h2>
                   <div class="flex items-center gap-2">
                     <!-- Invisible file input -->
@@ -996,7 +1005,7 @@
                     <button 
                       type="button" 
                       @click="showImportModal = true" 
-                      class="term-btn text-xs px-2 py-1 flex items-center gap-1 hover:bg-[#141c2b] font-mono"
+                      class="term-btn text-xs px-2 py-1 flex items-center gap-1 hover:bg-[#1a1a1a] font-mono"
                       :disabled="isImporting"
                     >
                       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -1021,7 +1030,7 @@
                 <div 
                   x-show="showImportModal" 
                   x-cloak 
-                  class="fixed inset-0 z-50 bg-[#070b12]/80 backdrop-blur-sm flex items-center justify-center p-4 font-mono"
+                  class="fixed inset-0 z-50 bg-[#080808]/80 backdrop-blur-sm flex items-center justify-center p-4 font-mono"
                   @keydown.escape.window="showImportModal = false"
                   x-transition:enter="transition ease-out duration-200"
                   x-transition:enter-start="opacity-0"
@@ -1032,7 +1041,7 @@
                 >
                   <div 
                     @click.away="showImportModal = false" 
-                    class="bg-[#0d121c] border border-slate-700 shadow-2xl max-w-lg w-full p-6 text-slate-300 relative border-l-4 border-l-[#00ff66]"
+                    class="bg-[#121212] border border-neutral-700 shadow-2xl max-w-lg w-full p-6 text-neutral-300 relative border-l-4 border-l-[#d92672]"
                     x-transition:enter="transition ease-out duration-200"
                     x-transition:enter-start="opacity-0 scale-95"
                     x-transition:enter-end="opacity-100 scale-100"
@@ -1041,69 +1050,69 @@
                     x-transition:leave-end="opacity-0 scale-95"
                   >
                     <!-- Header -->
-                    <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-800">
-                      <h3 class="text-[#00ff66] font-bold text-sm flex items-center gap-2 tracking-wider uppercase">
+                    <div class="flex items-center justify-between pb-3 mb-4 border-b border-neutral-800">
+                      <h3 class="text-[#d92672] font-bold text-sm flex items-center gap-2 tracking-wider uppercase">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                           <path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5"></path>
                         </svg>
                         <span>&gt; IMPORTAR MOVIMIENTOS DESDE INVIU</span>
                       </h3>
-                      <button @click="showImportModal = false" class="text-slate-500 hover:text-red-400 font-bold text-base px-1 transition-colors">✕</button>
+                      <button @click="showImportModal = false" class="text-neutral-500 hover:text-red-400 font-bold text-base px-1 transition-colors">✕</button>
                     </div>
 
                     <!-- Instructions body -->
-                    <p class="text-xs text-slate-400 mb-4">
+                    <p class="text-xs text-neutral-400 mb-4">
                       Para importar tus operaciones automáticamente, sigue estos pasos en tu cuenta de <strong class="text-white">Inviu</strong>:
                     </p>
 
                     <div class="space-y-2.5 mb-6 text-xs font-mono">
-                      <div class="flex items-start gap-2.5 bg-[#141c2b]/70 border border-slate-800/80 p-2.5 rounded">
-                        <span class="bg-[#00ff66]/10 text-[#00ff66] border border-[#00ff66]/30 px-1.5 py-0.5 rounded font-bold text-[11px]">1</span>
+                      <div class="flex items-start gap-2.5 bg-[#1a1a1a]/70 border border-neutral-800/80 p-2.5 rounded">
+                        <span class="bg-[#d92672]/10 text-[#d92672] border border-[#d92672]/30 px-1.5 py-0.5 rounded font-bold text-[11px]">1</span>
                         <div>
                           <span class="text-white font-semibold">Ir a Movimientos:</span>
-                          <p class="text-slate-400 text-[11px] mt-0.5">En la web de Inviu, ingresa a tu <strong class="text-slate-300">Portafolio</strong> y luego a la sección de <strong class="text-slate-300">Movimientos</strong>.</p>
+                          <p class="text-neutral-400 text-[11px] mt-0.5">En la web de Inviu, ingresa a tu <strong class="text-neutral-300">Portafolio</strong> y luego a la sección de <strong class="text-neutral-300">Movimientos</strong>.</p>
                         </div>
                       </div>
 
-                      <div class="flex items-start gap-2.5 bg-[#141c2b]/70 border border-slate-800/80 p-2.5 rounded">
+                      <div class="flex items-start gap-2.5 bg-[#1a1a1a]/70 border border-neutral-800/80 p-2.5 rounded">
                         <span class="bg-[#00f0ff]/10 text-[#00f0ff] border border-[#00f0ff]/30 px-1.5 py-0.5 rounded font-bold text-[11px]">2</span>
                         <div>
                           <span class="text-white font-semibold">Filtrar por Operación:</span>
-                          <p class="text-slate-400 text-[11px] mt-0.5">Filtra únicamente por las operaciones de <strong class="text-[#00ff66]">Compra</strong> y <strong class="text-red-400">Venta</strong>.</p>
+                          <p class="text-neutral-400 text-[11px] mt-0.5">Filtra únicamente por las operaciones de <strong class="text-[#d92672]">Compra</strong> y <strong class="text-red-400">Venta</strong>.</p>
                         </div>
                       </div>
 
-                      <div class="flex items-start gap-2.5 bg-[#141c2b]/70 border border-slate-800/80 p-2.5 rounded">
+                      <div class="flex items-start gap-2.5 bg-[#1a1a1a]/70 border border-neutral-800/80 p-2.5 rounded">
                         <span class="bg-amber-400/10 text-amber-400 border border-amber-400/30 px-1.5 py-0.5 rounded font-bold text-[11px]">3</span>
                         <div>
                           <span class="text-white font-semibold">Filtrar por Instrumento:</span>
-                          <p class="text-slate-400 text-[11px] mt-0.5">Filtra por los tickers correspondientes a <strong class="text-slate-300">Acciones y CEDEARs</strong>.</p>
+                          <p class="text-neutral-400 text-[11px] mt-0.5">Filtra por los tickers correspondientes a <strong class="text-neutral-300">Acciones y CEDEARs</strong>.</p>
                         </div>
                       </div>
 
-                      <div class="flex items-start gap-2.5 bg-[#141c2b]/70 border border-slate-800/80 p-2.5 rounded">
+                      <div class="flex items-start gap-2.5 bg-[#1a1a1a]/70 border border-neutral-800/80 p-2.5 rounded">
                         <span class="bg-purple-400/10 text-purple-400 border border-purple-400/30 px-1.5 py-0.5 rounded font-bold text-[11px]">4</span>
                         <div>
                           <span class="text-white font-semibold">Descargar Excel:</span>
-                          <p class="text-slate-400 text-[11px] mt-0.5">Haz clic en <strong class="text-slate-300">Descargar Excel</strong> (con los filtros aplicados).</p>
+                          <p class="text-neutral-400 text-[11px] mt-0.5">Haz clic en <strong class="text-neutral-300">Descargar Excel</strong> (con los filtros aplicados).</p>
                         </div>
                       </div>
 
-                      <div class="flex items-start gap-2.5 bg-[#141c2b]/70 border border-slate-800/80 p-2.5 rounded">
+                      <div class="flex items-start gap-2.5 bg-[#1a1a1a]/70 border border-neutral-800/80 p-2.5 rounded">
                         <span class="bg-emerald-400/10 text-emerald-400 border border-emerald-400/30 px-1.5 py-0.5 rounded font-bold text-[11px]">5</span>
                         <div>
                           <span class="text-white font-semibold">Cargar en el sistema:</span>
-                          <p class="text-slate-400 text-[11px] mt-0.5">Presiona el botón a continuación y selecciona el archivo <strong class="text-slate-300">.xlsx</strong> descargado.</p>
+                          <p class="text-neutral-400 text-[11px] mt-0.5">Presiona el botón a continuación y selecciona el archivo <strong class="text-neutral-300">.xlsx</strong> descargado.</p>
                         </div>
                       </div>
                     </div>
 
                     <!-- Actions -->
-                    <div class="flex flex-col sm:flex-row items-center gap-2 pt-2 border-t border-slate-800">
+                    <div class="flex flex-col sm:flex-row items-center gap-2 pt-2 border-t border-neutral-800">
                       <button 
                         type="button" 
                         @click="document.getElementById('excel-import-input').click()" 
-                        class="term-btn uppercase font-bold py-2.5 px-4 w-full border-[#00ff66] text-[#00ff66] hover:bg-[#00ff66]/10 flex items-center justify-center gap-2 text-xs tracking-wider"
+                        class="term-btn uppercase font-bold py-2.5 px-4 w-full border-[#d92672] text-[#d92672] hover:bg-[#d92672]/10 flex items-center justify-center gap-2 text-xs tracking-wider"
                         :disabled="isImporting"
                       >
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
@@ -1114,7 +1123,7 @@
                       <button 
                         type="button" 
                         @click="showImportModal = false" 
-                        class="term-btn uppercase font-bold py-2.5 px-4 w-full sm:w-auto border-slate-700 text-slate-400 hover:bg-[#141c2b] text-xs"
+                        class="term-btn uppercase font-bold py-2.5 px-4 w-full sm:w-auto border-neutral-700 text-neutral-400 hover:bg-[#1a1a1a] text-xs"
                       >
                         CANCELAR
                       </button>
@@ -1123,8 +1132,8 @@
                 </div>
                 <div class="overflow-y-auto max-h-[395px]">
                   <table class="w-full term-table font-mono text-[10px] text-left">
-                    <thead class="sticky top-0 bg-[#0d121c] z-10 shadow-sm">
-                      <tr class="border-b border-slate-800">
+                    <thead class="sticky top-0 bg-[#121212] z-10 shadow-sm">
+                      <tr class="border-b border-neutral-800">
                         <th class="py-1">FECHA</th>
                         <th>TICKER</th>
                         <th>TIPO</th>
@@ -1138,8 +1147,8 @@
                     </thead>
                     <tbody>
                       <template x-for="tx in transactions" :key="tx.id">
-                        <tr class="hover:bg-[#141c2b] border-b border-slate-900">
-                          <td class="text-slate-500 py-1" x-text="new Date(tx.date).toLocaleDateString([], {day:'2-digit', month:'2-digit', year:'2-digit'})"></td>
+                        <tr class="hover:bg-[#1a1a1a] border-b border-neutral-900">
+                          <td class="text-neutral-500 py-1" x-text="new Date(tx.date).toLocaleDateString([], {day:'2-digit', month:'2-digit', year:'2-digit'})"></td>
                           <td class="font-bold text-[#00f0ff] py-1">
                             <div class="flex items-center gap-1.5">
                               <div class="stock-logo-wrap logo-sm" :style="'background-color:' + getSymbolColor(tx.symbol)">
@@ -1149,11 +1158,11 @@
                             </div>
                           </td>
                           <td class="font-bold" :class="tx.operation_type === 'BUY' ? 'text-[#00ff66]' : 'text-[#ff3b30]'" x-text="tx.operation_type"></td>
-                          <td class="text-slate-300" x-text="tx.quantity"></td>
-                          <td class="text-slate-300" x-text="formatPrice(tx.price) + ' ' + tx.currency"></td>
-                          <td class="text-slate-400" x-text="tx.ratio"></td>
-                          <td class="text-slate-400" x-text="tx.currency === 'ARS' ? (1/tx.exchange_rate).toFixed(0) : ((1 - tx.exchange_rate) * 100).toFixed(1) + '%'"></td>
-                          <td class="text-slate-200" x-text="formatPrice(tx.price_comparable)"></td>
+                          <td class="text-neutral-300" x-text="tx.quantity"></td>
+                          <td class="text-neutral-300" x-text="formatPrice(tx.price) + ' ' + tx.currency"></td>
+                          <td class="text-neutral-400" x-text="tx.ratio"></td>
+                          <td class="text-neutral-400" x-text="tx.currency === 'ARS' ? (1/tx.exchange_rate).toFixed(0) : ((1 - tx.exchange_rate) * 100).toFixed(1) + '%'"></td>
+                          <td class="text-neutral-200" x-text="formatPrice(tx.price_comparable)"></td>
                           <td class="text-center py-1">
                             <div class="flex items-center justify-center gap-2">
                               <button @click.stop="editTransaction(tx)" class="text-[#00f0ff] hover:text-[#5ce1e6] font-bold" title="Editar">[EDIT]</button>
@@ -1164,7 +1173,7 @@
                       </template>
                       <template x-if="transactions.length === 0">
                         <tr>
-                          <td colspan="9" class="text-slate-500 text-center py-6 italic">
+                          <td colspan="9" class="text-neutral-500 text-center py-6 italic">
                             No hay transacciones registradas.
                           </td>
                         </tr>
@@ -1177,14 +1186,14 @@
           </div>
 
           <!-- RESUMEN DE OPERACIONES CERRADAS -->
-          <div class="border border-slate-800 bg-[#0d121c] p-4 flex flex-col min-h-[220px] mt-4">
-            <h2 class="text-[#00ff66] glow-green font-mono text-sm font-bold mb-3 flex items-center gap-2">
-              <span class="text-slate-500">&gt;</span> RESUMEN DE OPERACIONES CERRADAS (HISTORIAL)
+          <div class="border border-neutral-800 bg-[#121212] p-4 flex flex-col min-h-[220px] mt-4">
+            <h2 class="text-[#d92672] glow-magenta font-mono text-sm font-bold mb-3 flex items-center gap-2">
+              <span class="text-neutral-500">&gt;</span> RESUMEN DE OPERACIONES CERRADAS (HISTORIAL)
             </h2>
             <div class="overflow-x-auto flex-grow max-h-[300px]">
               <table class="w-full term-table font-mono text-left text-xs">
                 <thead>
-                  <tr class="border-b border-slate-800 pb-2">
+                  <tr class="border-b border-neutral-800 pb-2">
                     <th class="py-2">TICKER (EXT)</th>
                     <th>CANTIDAD (ACC. EQUIV.)</th>
                     <th>COMPRA PROM. PPC (USD)</th>
@@ -1196,7 +1205,7 @@
                 </thead>
                 <tbody>
                   <template x-for="trade in closedTrades" :key="trade.date + trade.symbol + trade.quantity">
-                    <tr class="hover:bg-[#141c2b] border-b border-slate-900">
+                    <tr class="hover:bg-[#1a1a1a] border-b border-neutral-900">
                       <td class="font-bold text-[#00f0ff] py-2">
                         <div class="flex items-center gap-1.5">
                           <div class="stock-logo-wrap logo-sm" :style="'background-color:' + getSymbolColor(trade.symbol)">
@@ -1205,17 +1214,17 @@
                           <span x-text="trade.symbol"></span>
                         </div>
                       </td>
-                      <td class="text-slate-300" x-text="trade.quantity % 1 === 0 ? trade.quantity.toFixed(0) : trade.quantity.toFixed(4)"></td>
-                      <td class="text-slate-400" x-text="formatPrice(trade.ppc_comparable)"></td>
-                      <td class="text-slate-300 font-bold" x-text="formatPrice(trade.price_comparable)"></td>
+                      <td class="text-neutral-300" x-text="trade.quantity % 1 === 0 ? trade.quantity.toFixed(0) : trade.quantity.toFixed(4)"></td>
+                      <td class="text-neutral-400" x-text="formatPrice(trade.ppc_comparable)"></td>
+                      <td class="text-neutral-300 font-bold" x-text="formatPrice(trade.price_comparable)"></td>
                       <td class="font-bold" :class="trade.pnl_usd >= 0 ? 'text-[#00ff66]' : 'text-[#ff3b30]'" x-text="(trade.pnl_usd >= 0 ? '+' : '') + formatPrice(trade.pnl_usd)"></td>
                       <td class="font-bold" :class="trade.pnl_percent >= 0 ? 'text-[#00ff66]' : 'text-[#ff3b30]'" x-text="formatPercent(trade.pnl_percent)"></td>
-                      <td class="text-slate-500" x-text="new Date(trade.date).toLocaleDateString([], {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})"></td>
+                      <td class="text-neutral-500" x-text="new Date(trade.date).toLocaleDateString([], {day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit'})"></td>
                     </tr>
                   </template>
                   <template x-if="closedTrades.length === 0">
                     <tr>
-                      <td colspan="7" class="text-slate-500 text-center py-8 italic">
+                      <td colspan="7" class="text-neutral-500 text-center py-8 italic">
                         No hay operaciones cerradas registradas. Las operaciones se cierran al registrar ventas (SELL) de activos existentes.
                       </td>
                     </tr>
@@ -1231,24 +1240,24 @@
   </main>
 
   <!-- FOOTER -->
-  <footer class="border-t border-slate-800/80 bg-[#070b12] py-4 px-4 md:px-6 -mx-4 md:-mx-6 -mb-4 md:-mb-6 mt-8 flex flex-col gap-2.5 text-[11px] font-mono text-slate-500">
+  <footer class="border-t border-neutral-800/80 bg-[#080808] py-4 px-4 md:px-6 -mx-4 md:-mx-6 -mb-4 md:-mb-6 mt-8 flex flex-col gap-2.5 text-[11px] font-mono text-neutral-500">
     <!-- Fila 1: Fuentes de datos y Disclaimer -->
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b border-slate-900 pb-2">
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-2 border-b border-neutral-900 pb-2">
       <div>
-        <span class="text-slate-400 font-bold">&gt; FUENTES:</span>
-        <span class="text-slate-400">Precios vía</span> <span class="text-slate-300">Yahoo Finance</span>
-        <span class="text-slate-600">|</span>
-        <span class="text-slate-400">Dólar vía</span> <span class="text-slate-300">DolarApi &amp; ArgentinaDatos</span>
-        <span class="text-slate-600">|</span>
-        <span class="text-slate-400">Ratios CEDEAR</span> <span class="text-slate-300">BYMA</span>
+        <span class="text-neutral-400 font-bold">&gt; FUENTES:</span>
+        <span class="text-neutral-400">Precios vía</span> <span class="text-neutral-300">Yahoo Finance</span>
+        <span class="text-neutral-600">|</span>
+        <span class="text-neutral-400">Dólar vía</span> <span class="text-neutral-300">DolarApi &amp; ArgentinaDatos</span>
+        <span class="text-neutral-600">|</span>
+        <span class="text-neutral-400">Ratios CEDEAR</span> <span class="text-neutral-300">BYMA</span>
       </div>
-      <div class="text-[10px] text-slate-600 italic">
+      <div class="text-[10px] text-neutral-600 italic">
         * Precios con demora de hasta 15-20 min. Solo fines informativos y de seguimiento personal.
       </div>
     </div>
 
     <!-- Fila 2: Licencia y Copyright -->
-    <div class="flex justify-end text-[10px] text-slate-600">
+    <div class="flex justify-end text-[10px] text-neutral-600">
       <span>&copy; 2026 FerBesson / Licencia MIT</span>
     </div>
   </footer>

@@ -2,25 +2,25 @@
 
 /* Main terminal variables */
 :root {
-  --bg-color: #07090e;
-  --bg-panel: #0d121c;
-  --bg-panel-hover: #141c2b;
-  --border-color: #1e293b;
-  --text-main: #cbd5e1;
-  --text-muted: #64748b;
+  --bg-color: #080808;
+  --bg-panel: #121212;
+  --bg-panel-hover: #1c1c1c;
+  --border-color: #262626;
+  --text-main: #e5e5e5;
+  --text-muted: #737373;
   
-  /* Vibrants */
-  --neon-green: #00ff66;
-  --neon-green-glow: rgba(0, 255, 102, 0.15);
+  /* Vibrants - Deeper, non-invasive Magenta / Fuchsia */
+  --neon-magenta: #d92672;
+  --neon-magenta-glow: rgba(217, 38, 114, 0.2);
+  --neon-pink: #db2777;
+  --neon-pink-glow: rgba(219, 39, 119, 0.2);
+  --neon-green: #d92672;
+  --neon-green-glow: rgba(217, 38, 114, 0.2);
   --neon-cyan: #00f0ff;
   --neon-cyan-glow: rgba(0, 240, 255, 0.15);
   --neon-red: #ff3b30;
   --neon-red-glow: rgba(255, 59, 48, 0.15);
   --neon-amber: #f59e0b;
-  --neon-pink: #ec4899;
-  --neon-magenta: #ff007f;
-  --neon-pink-glow: rgba(236, 72, 153, 0.45);
-  --neon-magenta-glow: rgba(255, 0, 127, 0.35);
 }
 
 body {
@@ -28,7 +28,7 @@ body {
   background-color: var(--bg-color);
   color: var(--text-main);
   background-image: 
-    radial-gradient(circle at 50% 50%, #0e1726 0%, #07090e 100%);
+    radial-gradient(circle at 50% 50%, #171717 0%, #080808 100%);
   overflow-x: hidden;
 }
 
@@ -73,33 +73,36 @@ body {
   background: var(--text-muted);
 }
 
-/* Glow effects */
+/* Glow effects - subtle, sharp text without blur */
+.glow-magenta {
+  text-shadow: 0 0 2px rgba(217, 38, 114, 0.25);
+}
 .glow-green {
-  text-shadow: 0 0 5px var(--neon-green-glow), 0 0 10px var(--neon-green-glow);
+  text-shadow: 0 0 2px rgba(0, 255, 102, 0.3);
 }
 .glow-cyan {
-  text-shadow: 0 0 5px var(--neon-cyan-glow), 0 0 10px var(--neon-cyan-glow);
+  text-shadow: 0 0 2px rgba(0, 240, 255, 0.2);
 }
 .glow-pink {
-  text-shadow: 0 0 5px var(--neon-pink-glow), 0 0 10px var(--neon-pink-glow);
+  text-shadow: 0 0 2px rgba(219, 39, 119, 0.2);
 }
 
 .nebula-icon-glow {
-  filter: drop-shadow(0 0 8px rgba(236, 72, 153, 0.6)) drop-shadow(0 0 18px rgba(192, 38, 211, 0.35));
+  filter: drop-shadow(0 0 6px rgba(217, 38, 114, 0.45)) drop-shadow(0 0 14px rgba(192, 38, 211, 0.2));
 }
 
 .nebula-icon-glow-lg {
-  filter: drop-shadow(0 0 14px rgba(236, 72, 153, 0.7)) drop-shadow(0 0 28px rgba(192, 38, 211, 0.45));
+  filter: drop-shadow(0 0 10px rgba(217, 38, 114, 0.5)) drop-shadow(0 0 20px rgba(192, 38, 211, 0.25));
 }
 
-.border-neon-green {
-  border-color: var(--neon-green);
-  box-shadow: 0 0 8px var(--neon-green-glow);
+.border-neon-magenta, .border-neon-green {
+  border-color: var(--neon-magenta);
+  box-shadow: 0 0 5px var(--neon-magenta-glow);
 }
 
 .border-neon-cyan {
   border-color: var(--neon-cyan);
-  box-shadow: 0 0 8px var(--neon-cyan-glow);
+  box-shadow: 0 0 5px var(--neon-cyan-glow);
 }
 
 /* Standard Terminal Buttons */
@@ -115,12 +118,12 @@ body {
 .term-btn:hover {
   border-color: var(--neon-cyan);
   color: var(--neon-cyan);
-  box-shadow: 0 0 8px var(--neon-cyan-glow);
+  box-shadow: 0 0 5px var(--neon-cyan-glow);
 }
 .term-btn-active {
-  border-color: var(--neon-green);
-  color: var(--neon-green);
-  box-shadow: 0 0 8px var(--neon-green-glow);
+  border-color: var(--neon-magenta);
+  color: var(--neon-magenta);
+  box-shadow: 0 0 5px var(--neon-magenta-glow);
 }
 
 /* Grid & Tables styling */
@@ -165,8 +168,8 @@ body {
 }
 .term-input:focus {
   outline: none;
-  border-color: var(--neon-green);
-  box-shadow: 0 0 8px var(--neon-green-glow);
+  border-color: var(--neon-magenta);
+  box-shadow: 0 0 4px var(--neon-magenta-glow);
 }
 
 /* Custom switch / checkbox */
@@ -182,12 +185,12 @@ body {
   outline: none;
 }
 .term-checkbox:checked {
-  border-color: var(--neon-green);
-  box-shadow: 0 0 4px var(--neon-green-glow);
+  border-color: var(--neon-magenta);
+  box-shadow: 0 0 4px var(--neon-magenta-glow);
 }
 .term-checkbox:checked::after {
   content: "■";
-  color: var(--neon-green);
+  color: var(--neon-magenta);
   font-size: 10px;
   position: absolute;
   top: -2px;
@@ -204,8 +207,8 @@ body {
   min-width: 22px;
   border-radius: 50%;
   overflow: hidden;
-  background-color: #1e293b;
-  border: 1px solid #334155;
+  background-color: #18181b;
+  border: 1px solid #27272a;
   flex-shrink: 0;
 }
 .stock-logo-wrap img {
