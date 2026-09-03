@@ -32,6 +32,10 @@ class YahooFinanceClient:
         self._cache = {}
         self._cache_ttl = 45
 
+        # In-memory historical chart cache (TTL: 300 seconds / 5 min)
+        self._hist_cache = {}
+        self._hist_cache_ttl = 300
+
     def _create_base_session(self) -> requests.Session:
         """Crea una sesión HTTP con Connection Pooling (Keep-Alive) para reutilizar sockets."""
         s = requests.Session()
@@ -343,7 +347,15 @@ class YahooFinanceClient:
         return quotes_dict
 
     def get_historical_data(self, symbol: str, time_range: str = "1mo", interval: str = "1d") -> List[Dict[str, Any]]:
-        """Fetch historical chart data for drawing charts reusing session."""
+        """Fetch historical chart data for drawing charts reusing session with TTL cache."""
+        sym_upper = symbol.upper()
+        cache_key = (sym_upper, time_range, interval)
+        now = time.time()
+        if cache_key in self._hist_cache:
+            entry = self._hist_cache[cache_key]
+            if now - entry["cached_at"] < self._hist_cache_ttl:
+                return entry["data"]
+
         self._init_session()
         client = self.session or requests
         if time_range == "1d":
@@ -351,13 +363,13 @@ class YahooFinanceClient:
         elif time_range == "5d":
             interval = "15m"
             
-        url = f"{BASE_URL}/v8/finance/chart/{symbol.upper()}"
+        url = f"{BASE_URL}/v8/finance/chart/{sym_upper}"
         params = {"range": time_range, "interval": interval}
         
         try:
             resp = client.get(url, params=params, timeout=8)
             if resp.status_code != 200:
-                resp = client.get(f"{FALLBACK_BASE_URL}/v8/finance/chart/{symbol.upper()}", params=params, timeout=8)
+                resp = client.get(f"{FALLBACK_BASE_URL}/v8/finance/chart/{sym_upper}", params=params, timeout=8)
             resp.raise_for_status()
             data = resp.json()
             
@@ -373,6 +385,8 @@ class YahooFinanceClient:
                         "time": ts,
                         "value": close_prices[i]
                     })
+            
+            self._hist_cache[cache_key] = {"data": chart_data, "cached_at": now}
             return chart_data
         except Exception as e:
             print(f"[YahooFinance] Chart fetch failed for {symbol}: {e}")
@@ -588,3 +602,224 @@ def get_cedear_info_by_symbol_and_date(symbol: str, date_val: Any = None) -> Dic
             res["ratio"] = 60.0
             
     return res
+
+
+def compute_portfolio_benchmark_series(
+    transactions: List[Any],
+    time_range: str = "ALL"
+) -> Dict[str, Any]:
+    """
+    Calcula las series temporales de rendimiento porcentual acumulado normalizado (base 0%)
+    tanto para la cartera del usuario como para el benchmark S&P 500 (SPY).
+    Soporta rangos: '1M', '3M', '6M', '1A'/'1Y', 'ALL'/'TODO'.
+    """
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+
+    tx_list = []
+    for tx in transactions:
+        t_dict = tx if isinstance(tx, dict) else {
+            "symbol": tx.symbol,
+            "operation_type": tx.operation_type,
+            "quantity": tx.quantity,
+            "ratio": tx.ratio,
+            "price_comparable": tx.price_comparable,
+            "date": tx.date
+        }
+        d = t_dict.get("date")
+        if isinstance(d, str):
+            try:
+                d = _dt.fromisoformat(d.replace("Z", "+00:00"))
+            except Exception:
+                d = _dt.now(_tz.utc)
+        if hasattr(d, "tzinfo") and d.tzinfo is not None:
+            d = d.astimezone(_tz.utc)
+        else:
+            d = d.replace(tzinfo=_tz.utc) if d else _dt.now(_tz.utc)
+        t_dict["date"] = d
+        tx_list.append(t_dict)
+
+    # Filtrar operaciones de CASH y ordenar cronológicamente
+    tx_list = [t for t in tx_list if str(t.get("symbol", "")).upper() != "CASH"]
+    tx_list.sort(key=lambda x: x["date"])
+
+    empty_response = {
+        "range": time_range,
+        "labels": [],
+        "portfolio_returns": [],
+        "benchmark_returns": [],
+        "summary": {
+            "portfolio_return": 0.0,
+            "benchmark_return": 0.0,
+            "alpha": 0.0
+        }
+    }
+
+    if not tx_list:
+        return empty_response
+
+    # Obtener tickers internacionales subyacentes
+    symbols_in_tx = list(set(t["symbol"].upper() for t in tx_list))
+    underlying_syms = list(set([get_cedear_info_by_symbol_and_date(s).get("symbol_origin", s) for s in symbols_in_tx] + ["SPY"]))
+
+    # Descargar precios históricos en paralelo
+    def _fetch_hist(sym):
+        try:
+            raw = finance_client.get_historical_data(sym, time_range="2y", interval="1d")
+            prices = {}
+            for row in raw:
+                dt_str = _dt.fromtimestamp(row["time"], tz=_tz.utc).strftime("%Y-%m-%d")
+                prices[dt_str] = float(row["value"])
+            return sym, prices
+        except Exception:
+            return sym, {}
+
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        hist_map = dict(list(ex.map(_fetch_hist, underlying_syms)))
+
+    spy_hist = hist_map.get("SPY", {})
+    if not spy_hist:
+        return empty_response
+
+    all_trading_dates = sorted(spy_hist.keys())
+    first_tx_date_str = tx_list[0]["date"].strftime("%Y-%m-%d")
+
+    # Determinar fecha de corte según el rango solicitado
+    now_utc = _dt.now(_tz.utc)
+    cutoff_date_str = first_tx_date_str
+
+    tr_upper = time_range.upper().strip() if time_range else "ALL"
+    if tr_upper == "1M":
+        target = (now_utc - _td(days=30)).strftime("%Y-%m-%d")
+        cutoff_date_str = max(first_tx_date_str, target)
+    elif tr_upper == "3M":
+        target = (now_utc - _td(days=90)).strftime("%Y-%m-%d")
+        cutoff_date_str = max(first_tx_date_str, target)
+    elif tr_upper == "6M":
+        target = (now_utc - _td(days=180)).strftime("%Y-%m-%d")
+        cutoff_date_str = max(first_tx_date_str, target)
+    elif tr_upper in ("1Y", "1A"):
+        target = (now_utc - _td(days=365)).strftime("%Y-%m-%d")
+        cutoff_date_str = max(first_tx_date_str, target)
+    elif tr_upper in ("ALL", "TODO"):
+        cutoff_date_str = first_tx_date_str
+
+    valid_dates = [d for d in all_trading_dates if d >= cutoff_date_str]
+    if not valid_dates:
+        valid_dates = all_trading_dates[-30:] if len(all_trading_dates) >= 30 else all_trading_dates
+
+    # Indexar transacciones por fecha (YYYY-MM-DD)
+    tx_by_date: Dict[str, List[Dict[str, Any]]] = {}
+    for tx in tx_list:
+        d_str = tx["date"].strftime("%Y-%m-%d")
+        if d_str not in tx_by_date:
+            tx_by_date[d_str] = []
+        tx_by_date[d_str].append(tx)
+
+    # Posiciones iniciales antes de valid_dates[0]
+    holdings: Dict[str, float] = {s: 0.0 for s in symbols_in_tx}
+    last_known_prices: Dict[str, float] = {s: 0.0 for s in symbols_in_tx}
+
+    start_date = valid_dates[0]
+    for tx in tx_list:
+        d_str = tx["date"].strftime("%Y-%m-%d")
+        if d_str < start_date:
+            s = tx["symbol"].upper()
+            ratio = tx.get("ratio") or 1.0
+            qty = tx["quantity"] / ratio
+            if tx["operation_type"] == "BUY":
+                holdings[s] += qty
+                last_known_prices[s] = tx["price_comparable"]
+            elif tx["operation_type"] == "SELL":
+                holdings[s] = max(0.0, holdings[s] - qty)
+
+    labels = []
+    nav_port_series = []
+    nav_spy_series = []
+
+    # Base inicial 100.0
+    labels.append(start_date)
+    nav_port_series.append(100.0)
+    nav_spy_series.append(100.0)
+
+    # Transacciones en la fecha inicial
+    if start_date in tx_by_date:
+        for tx in tx_by_date[start_date]:
+            s = tx["symbol"].upper()
+            ratio = tx.get("ratio") or 1.0
+            qty = tx["quantity"] / ratio
+            if tx["operation_type"] == "BUY":
+                holdings[s] += qty
+                last_known_prices[s] = tx["price_comparable"]
+            elif tx["operation_type"] == "SELL":
+                holdings[s] = max(0.0, holdings[s] - qty)
+
+    # Recorrer días hábiles
+    for i in range(1, len(valid_dates)):
+        cur_d = valid_dates[i]
+        prev_d = valid_dates[i - 1]
+
+        # Actualizar últimos precios conocidos
+        for s in symbols_in_tx:
+            us_sym = get_cedear_info_by_symbol_and_date(s).get("symbol_origin", s)
+            p = hist_map.get(us_sym, {}).get(cur_d)
+            if p is not None and p > 0:
+                last_known_prices[s] = p
+
+        # Retorno diario de la cartera ponderada
+        val_start = 0.0
+        val_end = 0.0
+        for s, qty in holdings.items():
+            if qty > 0:
+                us_sym = get_cedear_info_by_symbol_and_date(s).get("symbol_origin", s)
+                p_end = hist_map.get(us_sym, {}).get(cur_d, last_known_prices[s])
+                p_start = hist_map.get(us_sym, {}).get(prev_d, p_end)
+                if p_start > 0 and p_end > 0:
+                    val_start += qty * p_start
+                    val_end += qty * p_end
+
+        r_port = (val_end / val_start - 1.0) if val_start > 0 else 0.0
+
+        p_spy_end = spy_hist.get(cur_d)
+        p_spy_start = spy_hist.get(prev_d)
+        r_spy = (p_spy_end / p_spy_start - 1.0) if (p_spy_start and p_spy_end and p_spy_start > 0) else 0.0
+
+        nav_port_series.append(nav_port_series[-1] * (1.0 + r_port))
+        nav_spy_series.append(nav_spy_series[-1] * (1.0 + r_spy))
+        labels.append(cur_d)
+
+        # Aplicar operaciones del día
+        if cur_d in tx_by_date:
+            for tx in tx_by_date[cur_d]:
+                s = tx["symbol"].upper()
+                ratio = tx.get("ratio") or 1.0
+                qty = tx["quantity"] / ratio
+                if tx["operation_type"] == "BUY":
+                    holdings[s] += qty
+                    if last_known_prices[s] == 0:
+                        last_known_prices[s] = tx["price_comparable"]
+                elif tx["operation_type"] == "SELL":
+                    holdings[s] = max(0.0, holdings[s] - qty)
+
+    # Normalizar a porcentaje acumulado respecto a la fecha inicial
+    base_port = nav_port_series[0] if nav_port_series else 100.0
+    base_spy = nav_spy_series[0] if nav_spy_series else 100.0
+
+    port_returns = [round((v / base_port - 1.0) * 100, 2) for v in nav_port_series]
+    spy_returns = [round((v / base_spy - 1.0) * 100, 2) for v in nav_spy_series]
+
+    final_port = port_returns[-1] if port_returns else 0.0
+    final_spy = spy_returns[-1] if spy_returns else 0.0
+    alpha = round(final_port - final_spy, 2)
+
+    return {
+        "range": tr_upper,
+        "labels": labels,
+        "portfolio_returns": port_returns,
+        "benchmark_returns": spy_returns,
+        "summary": {
+            "portfolio_return": final_port,
+            "benchmark_return": final_spy,
+            "alpha": alpha
+        }
+    }
+

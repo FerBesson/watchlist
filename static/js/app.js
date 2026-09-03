@@ -56,7 +56,11 @@ document.addEventListener('alpine:init', () => {
         isImporting: false,
         showImportModal: false,
         showTxHelpModal: false,
-        isDownloadingFactsheet: false,
+        portfolioBenchmarkRange: 'ALL',
+        portfolioBenchmarkChartInstance: null,
+        portfolioBenchmarkLabels: [],
+        portfolioBenchmarkSummary: { portfolio_return: 0.0, benchmark_return: 0.0, alpha: 0.0 },
+        isBenchmarkLoading: false,
         // Inline Creation State
         isCreatingWatchlist: false,
         newWatchlistInputName: '',
@@ -677,6 +681,7 @@ document.addEventListener('alpine:init', () => {
                 
                 this.$nextTick(() => {
                     this.renderPortfolioTreemap();
+                    this.fetchPortfolioBenchmarkChart();
                 });
                 return;
             }
@@ -693,6 +698,7 @@ document.addEventListener('alpine:init', () => {
                     this.portfolioTIR = data.tir;
                     this.$nextTick(() => {
                         this.renderPortfolioTreemap();
+                        this.fetchPortfolioBenchmarkChart();
                     });
                 }
             } catch (error) {
@@ -700,64 +706,183 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
-        // Descargar Factsheet Institucional de Cartera en PDF
-        async downloadFactsheetPdf() {
-            if (this.isDownloadingFactsheet) return;
+        // Cambiar rango de tiempo del benchmark (1M, 3M, 6M, 1A, TODO)
+        setPortfolioBenchmarkRange(r) {
+            this.portfolioBenchmarkRange = r;
+            this.fetchPortfolioBenchmarkChart(r);
+        },
 
-            if (!this.portfolioItems || this.portfolioItems.length === 0) {
-                alert('La cartera no contiene activos registrados para generar el factsheet.');
+        // Obtener datos históricos de rendimiento comparativo (Cartera vs S&P 500)
+        async fetchPortfolioBenchmarkChart(range = null) {
+            const timeRange = range || this.portfolioBenchmarkRange || 'ALL';
+            this.isBenchmarkLoading = true;
+
+            try {
+                let response;
+                if (this.isGuest) {
+                    response = await fetch(`/api/portfolio/benchmark-chart?range=${encodeURIComponent(timeRange)}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            transactions: this.transactions,
+                            range: timeRange
+                        })
+                    });
+                } else {
+                    response = await this.authFetch(`/api/portfolio/benchmark-chart?range=${encodeURIComponent(timeRange)}`);
+                }
+
+                if (response && response.ok) {
+                    const data = await response.json();
+                    this.portfolioBenchmarkLabels = data.labels || [];
+                    this.portfolioBenchmarkSummary = data.summary || { portfolio_return: 0.0, benchmark_return: 0.0, alpha: 0.0 };
+                    this.$nextTick(() => {
+                        this.renderPortfolioBenchmarkChart(data);
+                    });
+                } else {
+                    console.warn('Failed to load benchmark chart data');
+                    this.portfolioBenchmarkLabels = [];
+                    this.renderPortfolioBenchmarkChart({ labels: [], portfolio_returns: [], benchmark_returns: [] });
+                }
+            } catch (error) {
+                console.error('Error loading benchmark chart data:', error);
+                this.portfolioBenchmarkLabels = [];
+            } finally {
+                this.isBenchmarkLoading = false;
+            }
+        },
+
+        // Renderizar gráfico interactivo de líneas con Chart.js
+        renderPortfolioBenchmarkChart(data) {
+            const ctx = document.getElementById('portfolioBenchmarkChart');
+            if (!ctx) return;
+
+            if (this.portfolioBenchmarkChartInstance) {
+                this.portfolioBenchmarkChartInstance.destroy();
+                this.portfolioBenchmarkChartInstance = null;
+            }
+
+            if (!data || !data.labels || data.labels.length === 0) {
                 return;
             }
 
-            this.isDownloadingFactsheet = true;
-
-            try {
-                const payload = {
-                    items: this.portfolioItems,
-                    transactions: this.transactions,
-                    realized_pnl: this.portfolioRealizedPnL,
-                    realized_pnl_percent: this.portfolioRealizedPnLPercent,
-                    metrics: this.portfolioMetrics,
-                    closed_trades: this.closedTrades,
-                    tir: this.portfolioTIR
-                };
-
-                let response;
-                if (this.isGuest) {
-                    response = await fetch('/api/portfolio/factsheet-pdf', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                } else {
-                    response = await this.authFetch('/api/portfolio/factsheet-pdf', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
+            // Formatear etiquetas de fecha limpias para el eje X
+            const formattedLabels = data.labels.map(dStr => {
+                try {
+                    const parts = dStr.split('-');
+                    if (parts.length === 3) {
+                        return `${parts[2]}/${parts[1]}`;
+                    }
+                    return dStr;
+                } catch (e) {
+                    return dStr;
                 }
+            });
 
-                if (!response.ok) {
-                    const errText = await response.text();
-                    throw new Error(`Error ${response.status}: ${errText || 'Error en el servidor'}`);
+            // Gradiente Neón Cian para la Cartera
+            const chartContext = ctx.getContext('2d');
+            const portGradient = chartContext.createLinearGradient(0, 0, 0, 180);
+            portGradient.addColorStop(0, 'rgba(0, 240, 255, 0.22)');
+            portGradient.addColorStop(1, 'rgba(0, 240, 255, 0.0)');
+
+            this.portfolioBenchmarkChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: formattedLabels,
+                    datasets: [
+                        {
+                            label: 'Cartera',
+                            data: data.portfolio_returns,
+                            borderColor: '#00f0ff',
+                            backgroundColor: portGradient,
+                            fill: true,
+                            tension: 0.25,
+                            borderWidth: 2,
+                            pointRadius: data.labels.length > 50 ? 0 : 2,
+                            pointHoverRadius: 4,
+                            pointBackgroundColor: '#00f0ff'
+                        },
+                        {
+                            label: 'S&P 500',
+                            data: data.benchmark_returns,
+                            borderColor: '#a855f7',
+                            backgroundColor: 'transparent',
+                            fill: false,
+                            tension: 0.25,
+                            borderWidth: 1.5,
+                            borderDash: [4, 4],
+                            pointRadius: data.labels.length > 50 ? 0 : 2,
+                            pointHoverRadius: 4,
+                            pointBackgroundColor: '#a855f7'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: {
+                        duration: 350
+                    },
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: '#121212',
+                            titleColor: '#a3a3a3',
+                            bodyColor: '#f5f5f5',
+                            borderColor: '#262626',
+                            borderWidth: 1,
+                            padding: 8,
+                            displayColors: true,
+                            titleFont: { family: 'monospace', size: 10 },
+                            bodyFont: { family: 'monospace', size: 11, weight: 'bold' },
+                            callbacks: {
+                                title: (tooltipItems) => {
+                                    const idx = tooltipItems[0].dataIndex;
+                                    return data.labels[idx] || tooltipItems[0].label;
+                                },
+                                label: (context) => {
+                                    const val = context.parsed.y;
+                                    const sign = val >= 0 ? '+' : '';
+                                    return ` ${context.dataset.label}: ${sign}${val.toFixed(2)}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: true,
+                                color: 'rgba(255, 255, 255, 0.04)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#525252',
+                                font: { family: 'monospace', size: 9 },
+                                maxTicksLimit: 5,
+                                maxRotation: 0
+                            }
+                        },
+                        y: {
+                            grid: {
+                                display: true,
+                                color: (context) => context.tick && context.tick.value === 0 ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                                drawBorder: false
+                            },
+                            ticks: {
+                                color: '#737373',
+                                font: { family: 'monospace', size: 9 },
+                                callback: (val) => `${val >= 0 ? '+' : ''}${val}%`
+                            }
+                        }
+                    }
                 }
-
-                const blob = await response.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                const nowStr = new Date().toISOString().split('T')[0];
-                a.download = `Factsheet_Cartera_Renta_Variable_${nowStr}.pdf`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(url);
-            } catch (error) {
-                console.error('Error downloading factsheet:', error);
-                alert('Ocurrió un error al generar el factsheet PDF: ' + (error.message || error));
-            } finally {
-                this.isDownloadingFactsheet = false;
-            }
+            });
         },
 
         // Fetch transactions log

@@ -433,6 +433,40 @@ def read_portfolio(
     return crud.get_portfolio(db=db, user_id=current_user.id)
 
 
+@app.get("/api/portfolio/benchmark-chart")
+def get_portfolio_benchmark_chart(
+    range: str = Query("ALL", description="Time range: 1M, 3M, 6M, 1A, ALL"),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Calcula y retorna la serie temporal comparativa del rendimiento de la cartera contra el S&P 500 (SPY)."""
+    from .finance import compute_portfolio_benchmark_series
+    txs = db.query(models.Transaction).filter(models.Transaction.user_id == current_user.id).order_by(models.Transaction.date.asc(), models.Transaction.id.asc()).all()
+    return compute_portfolio_benchmark_series(transactions=txs, time_range=range)
+
+
+@app.post("/api/portfolio/benchmark-chart")
+def post_portfolio_benchmark_chart(
+    payload: Optional[Dict[str, Any]] = Body(None),
+    range: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Calcula la serie comparativa contra el S&P 500 para usuarios invitados o con payload de transacciones."""
+    from .finance import compute_portfolio_benchmark_series
+    time_range = "ALL"
+    if payload is not None and "transactions" in payload:
+        time_range = payload.get("range") or range or "ALL"
+        txs = payload.get("transactions", [])
+    else:
+        if payload:
+            time_range = payload.get("range") or range or "ALL"
+        elif range:
+            time_range = range
+        txs = db.query(models.Transaction).order_by(models.Transaction.date.asc(), models.Transaction.id.asc()).all()
+
+    return compute_portfolio_benchmark_series(transactions=txs, time_range=time_range)
+
+
 def get_optional_user(
     credentials: Optional[Any] = Depends(auth_router.routes[0].endpoint if False else None),
     db: Session = Depends(get_db)
