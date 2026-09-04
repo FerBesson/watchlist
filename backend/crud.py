@@ -218,11 +218,16 @@ def create_transaction(db: Session, tx: schemas.TransactionCreate, user_id: Opti
     db.refresh(db_tx)
     return db_tx
 
-def get_transactions(db: Session, user_id: Optional[int] = None, skip: int = 0, limit: int = 100):
+def get_transactions(db: Session, user_id: Optional[int] = None, skip: int = 0, limit: Optional[int] = None):
     query = db.query(models.Transaction)
     if user_id is not None:
         query = query.filter(models.Transaction.user_id == user_id)
-    return query.order_by(models.Transaction.date.desc(), models.Transaction.id.desc()).offset(skip).limit(limit).all()
+    query = query.order_by(models.Transaction.date.desc(), models.Transaction.id.desc())
+    if skip:
+        query = query.offset(skip)
+    if limit is not None:
+        query = query.limit(limit)
+    return query.all()
 
 def update_transaction(db: Session, tx_id: int, tx_update: schemas.TransactionUpdate, user_id: Optional[int] = None) -> Optional[models.Transaction]:
     query = db.query(models.Transaction).filter(models.Transaction.id == tx_id)

@@ -371,11 +371,11 @@ def create_transaction(
 @app.get("/api/transactions", response_model=List[schemas.Transaction])
 def read_transactions(
     skip: int = 0, 
-    limit: int = 100, 
+    limit: Optional[int] = Query(None, description="Límite opcional de transacciones"), 
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(get_current_user)
 ):
-    """Get the log of transactions for logged in user."""
+    """Get the full log of transactions for logged in user."""
     return crud.get_transactions(db=db, user_id=current_user.id, skip=skip, limit=limit)
 
 @app.put("/api/transactions/{transaction_id}", response_model=schemas.Transaction)
